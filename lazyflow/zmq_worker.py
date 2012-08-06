@@ -40,6 +40,9 @@ class ZMQWorker(threading.Thread):
         threading.Thread.__init__(self)
         self.daemon = True
         self._glob_dict = glob_dict
+        
+        if not os.environ.has_key("LAZYFLOW_SERVER"):
+            raise RuntimeError("ZMQWorker: LAZYFLOW_SERVER environment variable not set. Example: 'tcp://127.0.0.1' ")
 
         self._server = os.environ["LAZYFLOW_SERVER"]
         self._ctx = zmq.Context()
