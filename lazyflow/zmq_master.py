@@ -27,8 +27,9 @@ class ZMQMasterWork(threading.Thread):
           pass
     
     def _send_request(self, request):
-        self._requests[id(request)] = request
-        self._zmq_socket_work.send_pyobj({ 'id': id(request), 'function' : dump_func_to_string(request.function), 'kwargs': request.kwargs})
+        if not self._requests.has_key(id(request)):
+            self._requests[id(request)] = request
+            self._zmq_socket_work.send_pyobj({ 'id': id(request), 'function' : dump_func_to_string(request.function), 'kwargs': request.kwargs})
 
     def run(self):
         self._zmq_socket_work = zmq.Socket(self._zmq_ctx, zmq.PUSH)
@@ -78,9 +79,14 @@ class ZMQMasterResults(threading.Thread):
                 result = msg['result']
                 cur_req = self.current_request
                 request.after_execute(result, self, cur_req)
+                del self._requests[msg['id']] # remove request from dict to free memory
               else:
                 # reraise remote error locally
                 print "Exception in Worker:", msg["traceback"]
+                print "Restarting request", msg['id']
+                req = self._requests[msg['id']] 
+                del self._requests[msg['id']] # remove from dict to allow resubmission
+                self._threadpool._zmq_work.putRequest(req)
 
     def stop(self):
         self._running = False
