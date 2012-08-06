@@ -74,6 +74,9 @@ class ZMQMasterResults(threading.Thread):
             events = self._zmq_socket_results.poll(50) # check every 50ms for thread stop
             if events != 0:
               msg = self._zmq_socket_results.recv_pyobj()
+              if not self._requests.has_key(msg['id']):
+                  print "Master: obtained results for unknown request %r, silently dropping..." % msg['id']
+                  continue
               if msg["finished"]:
                 request = self._requests[msg['id']]
                 result = msg['result']
@@ -82,8 +85,8 @@ class ZMQMasterResults(threading.Thread):
                 del self._requests[msg['id']] # remove request from dict to free memory
               else:
                 # reraise remote error locally
-                print "Exception in Worker:", msg["traceback"]
-                print "Restarting request", msg['id']
+                print "Master: Request %r resulted in exception in Worker %s" % (msg['id'], msg["traceback"])
+                print "Master: Restarting request", msg['id']
                 req = self._requests[msg['id']] 
                 del self._requests[msg['id']] # remove from dict to allow resubmission
                 self._threadpool._zmq_work.putRequest(req)
