@@ -11,6 +11,8 @@ from helpers import detectCPUs
 import math
 import logging
 
+from zmq_master import ZMQMasterWork, ZMQMasterResults
+
 greenlet.GREENLET_USE_GC = False #use garbage collection
 sys.setrecursionlimit(1000)
 
@@ -43,7 +45,6 @@ def runDebugShell():
         IPython.embed()
 
 
-
 class Worker(Thread):
     
     logger = logging.getLogger(__name__ + '.Worker')
@@ -66,6 +67,9 @@ class Worker(Thread):
         self.wlock = threading.Lock()
         self.wlock.acquire()
         self.workAvailable = False
+
+    def submit_cloud(self):
+        pass
 
 
     def stop(self):
@@ -193,6 +197,9 @@ class ThreadPool(object):
         self.freeWorkers = set()
         self.numThreads = detectCPUs()
         self.lastWorker = None
+
+        self._init_zmq()
+
         for i in range(int(math.ceil(self.numThreads/2.0))):
             w = Worker(self)
             self.workers.add(w)
@@ -200,6 +207,18 @@ class ThreadPool(object):
             self.lastWorker = w
         self._pausesLock = threading.Lock()
         self._pauses = 0
+
+    def _init_zmq(self):
+        self._zmq_work = ZMQMasterWork(self)
+        self._zmq_work.start()
+        self._zmq_results = ZMQMasterResults(self, self._zmq_work._requests)
+        patchIfForeignThread(self._zmq_results)
+        self._zmq_results.start()
+
+
+    def putRequest_cloud(self, request):
+        self._zmq_work.putRequest(request)
+
 
     def putRequest(self, request):
         """
@@ -229,6 +248,8 @@ class ThreadPool(object):
         """
         if not self._finished:
             self._finished = True
+            self._zmq_work.stop()
+            self._zmq_results.stop()
             # stop the workers of the machine
             for w in self.workers:
                 w.stop()
@@ -465,6 +486,26 @@ class Request(object):
           self.lock.release()
         return self.result
 
+    def submit_cloud(self):
+        """
+        asynchronous execution in background via zmq
+        """
+        
+        # test before locking, otherwise deadlock ?
+        if self.finished or self.canceled:
+          return self
+        
+        self.lock.acquire()
+        if not self.running:
+            self.running = True
+            self.lock.release()
+            global_thread_pool.putRequest_cloud(self)
+        else:
+            self.lock.release()
+        return self
+
+
+
     def submit(self):
         """
         asynchronous execution in background
@@ -563,9 +604,14 @@ class Request(object):
         # do the actual work
         self.result = self.function(**self.kwargs)
 
+        self.after_execute(self.result, cur_tr, req_backup)
+
+    def after_execute(self, result, cur_tr, req_backup):
         self.lock.acquire()
-        self.processing = True
+        self.result = result
         self.finished = True
+        self.processing = True
+
         waiting_greenlets = self.waiting_greenlets
         self.waiting_greenlets = None
         # waiting_locks = self.waiting_locks
