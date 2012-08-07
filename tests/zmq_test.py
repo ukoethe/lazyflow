@@ -2,7 +2,8 @@ import lazyflow
 from lazyflow.graph import Operator, InputSlot, OutputSlot
 from lazyflow.request import Request
 from lazyflow.zmq_worker import ZMQWorker
-import numpy
+import numpy as np
+import numpy as numpy
 import random
 request_count = 10
 
@@ -16,6 +17,7 @@ class OpA(Operator):
     def execute(self, slot, roi, result):
         
         def blubb( a, b, nr):
+            test = np.ndarray((100,200))
             time.sleep(random.random())
             result = a + b
             print "Worker: Request %d finished" % nr

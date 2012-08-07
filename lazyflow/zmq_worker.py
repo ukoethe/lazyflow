@@ -12,14 +12,29 @@ def dump_func_to_string(f):
         closure = tuple(c.cell_contents for c in f.func_closure)
     else:
         closure = None
-    return pickle.dumps((marshal.dumps(f.func_code), f.func_defaults, closure))
+    globs = f.func_globals 
+    globals_mapping = {}
+    for k, v in globs.items():
+        name = k
+        try:
+            name = v.__name__
+        except:
+            pass
+        if k != name:
+            globals_mapping[k] = name
+    return pickle.dumps((marshal.dumps(f.func_code), f.func_defaults, closure, globals_mapping))
 
 
 def load_func_from_string(s, glob_dict):
-    code, defaults, closure = pickle.loads(s)
+    code, defaults, closure, globals_mapping = pickle.loads(s)
     if closure is not None:
         closure = reconstruct_closure(closure)
     code = marshal.loads(code)
+    for k,v in globals_mapping.items():
+        try:
+            glob_dict[k] = __import__(v)
+        except:
+            pass
     return new.function(code, glob_dict, code.co_name, defaults, closure)
 
 
