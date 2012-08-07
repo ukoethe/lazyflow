@@ -11,7 +11,7 @@ from helpers import detectCPUs
 import math
 import logging
 
-from zmq_master import ZMQMasterWork, ZMQMasterResults
+from zmq_master import ZMQMasterWork, ZMQMasterResults, ZMQWatchDog
 
 greenlet.GREENLET_USE_GC = False #use garbage collection
 sys.setrecursionlimit(1000)
@@ -209,10 +209,12 @@ class ThreadPool(object):
         self._pauses = 0
 
     def _init_zmq(self):
+        self._zmq_watch = ZMQWatchDog(self)
         self._zmq_work = ZMQMasterWork(self)
-        self._zmq_work.start()
         self._zmq_results = ZMQMasterResults(self, self._zmq_work._requests)
         patchIfForeignThread(self._zmq_results)
+        self._zmq_watch.start()
+        self._zmq_work.start()
         self._zmq_results.start()
 
 
@@ -248,6 +250,7 @@ class ThreadPool(object):
         """
         if not self._finished:
             self._finished = True
+            self._zmq_watch.stop()
             self._zmq_work.stop()
             self._zmq_results.stop()
             # stop the workers of the machine
