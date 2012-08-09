@@ -43,9 +43,7 @@ class ZMQMasterWork(threading.Thread):
             if events == zmq.POLLIN:
                 token = self._work_socket.recv_pyobj()
                 self._requests[id(request)] = request
-                print "   sending..."
                 self._work_socket.send_pyobj({ 'id': id(request), 'function' : dump_func_to_string(request.function), 'kwargs': request.kwargs})
-                print "   done"
                 self._watchdog.watch(request) # add request to watchdog
                 found_worker = True
             else:
@@ -214,6 +212,28 @@ class ZMQMasterRequests(threading.Thread):
                 if msg["type"] == "import":
                     print "MASTER: resolving import dependencies for %s" % msg["name"]
                     answer = self.get_import_dependencies(msg)
+                    self._request_socket.send_pyobj(answer)
+                
+                if msg["type"] == "get_name":
+                    print "MASTER: resolving name %s" % msg["name"]
+                    req = self._requests[msg["id"]]
+                    func = req.function
+                    globs = func.func_globals
+                    res = globs[msg["name"]]
+                    if hasattr(res, "__module__") and res.__module__ == func.__module__:
+                        if func.__module__  != "__main__":
+                            answer = {
+                                "type" : "something",
+                                "object" : pickle.dumps(res)
+                            }
+                            print "   type:", type(res)
+                        else:
+                            raise Exception("lazyflow: transmitting dependent functions or objects from __main__: NOT YET IMPLEMENTED\n please use functions or classes defined in a DIFFERENT PYTHON file and import them for now - this is supported.")
+                    else:
+                        answer = {
+                            "type" : "import"
+                        }
+                        print "   type: import"
                     self._request_socket.send_pyobj(answer)
 
 

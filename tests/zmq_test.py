@@ -5,7 +5,15 @@ from lazyflow.zmq_worker import ZMQWorker
 import numpy as np
 import numpy as numpy
 import random
+import time
 request_count = 10
+
+def bribbel():
+    print "jashdkjahsdkjhasdkjhaskdhaksjdhaksdjh"
+    return numpy.random.randint(0,200)
+
+def brababbel():
+    bribbel()
 
 class OpA(Operator):
     out = OutputSlot()
@@ -27,6 +35,7 @@ class OpA(Operator):
             time.sleep(random.random())
             result = a + b
             blabb("WORKER: Request %d finished" % nr)
+            #bribbel()
             #brabbel("brabbel")
             return result
 
@@ -60,3 +69,26 @@ result = op.out[0].wait()
 print "Operator returned"
 
 print result
+
+
+
+
+req = Request(bribbel)
+req.submit_cloud()
+req.wait()
+
+
+from zmq_test2 import brubbel
+req = Request(brubbel)
+req.submit_cloud()
+req.wait()
+
+from zmq_test2 import brubbel as brub
+req = Request(brub)
+req.submit_cloud()
+req.wait()
+
+req = Request(brababbel)
+req.submit_cloud()
+req.wait()
+

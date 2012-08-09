@@ -1,4 +1,5 @@
 import os, sys
+import time
 import string
 import zmq
 import marshal, new
@@ -11,6 +12,7 @@ import threading
 import __builtin__
 import imp
 import traceback
+import types
 
 inc_dir = os.path.expanduser("~/.lazyflow/site-packages")
 
@@ -39,6 +41,9 @@ def dump_func_to_string(f):
             pass
         if k != name:
             globals_mapping[k] = name
+        elif hasattr(v, "__module__") and v.__module__ == "__main__":
+            pass
+
     return pickle.dumps((marshal.dumps(f.func_code), f.func_defaults, closure, globals_mapping))
 
 
@@ -48,10 +53,14 @@ def load_func_from_string(s, glob_dict = globals()):
         closure = reconstruct_closure(closure)
     code = marshal.loads(code)
     for k,v in globals_mapping.items():
-        try:
-            glob_dict[k] = __import__(v)
-        except:
-            pass
+        if type(v) == types.StringType:
+            try:
+                glob_dict[k] = __import__(v)
+            except:
+                pass
+        else:
+            print "strange global", v
+
     return new.function(code, glob_dict, code.co_name, defaults, closure)
 
 def func_pickler(func):
@@ -75,11 +84,24 @@ def reconstruct_closure(values):
     return f(values).func_closure
 
 
+class ZMQDict(dict):
+    def __init__(self, src, worker, req):
+        self._worker = worker
+        self._req = req
+
+    def __getitem__(key):
+        if not self.has_key(key):
+            result = self._worker.resolve_name(self._req["id"], key)
+            self[key] = result
+        return dict.__getitem__(key)
+
+
+
+
 class ZMQWorker(threading.Thread):
-    def __init__(self, glob_dict = globals(), master_timeout = 5000):
+    def __init__(self, master_timeout = 5000):
         threading.Thread.__init__(self)
         self.daemon = True
-        self._glob_dict = glob_dict
         
         if not os.environ.has_key("LAZYFLOW_SERVER"):
             raise RuntimeError("ZMQWorker: LAZYFLOW_SERVER environment variable not set. Example: 'tcp://127.0.0.1' ")
@@ -141,9 +163,12 @@ class ZMQWorker(threading.Thread):
                 if events == zmq.POLLIN:
                     self._current_req = True
                     finished = False
+
                     
-                    self._set_import_hook()
                     self._current_req = req = self._work_socket.recv_pyobj()
+                    self._set_import_hook()
+                    glob_dict = ZMQDict(globals(), self, req)
+
                     received = True
 
                     # handle master stop
@@ -154,7 +179,7 @@ class ZMQWorker(threading.Thread):
 
                     self.send_ack(req)
 
-                    func = load_func_from_string(req["function"], self._glob_dict)
+                    func = load_func_from_string(req["function"], glob_dict)
                     kwargs = req["kwargs"]
                     
                     tried = {}
@@ -167,11 +192,11 @@ class ZMQWorker(threading.Thread):
                                 finished = True
                             except NameError as e:
                                 parts = string.split(str(e), "'")
-                                module = parts[1]
-                                if tried.has_key(module) is False:
-                                    tried[module] = True
-                                    print "Imorting module", module
-                                    globals()[parts[1]] = __import__(module)
+                                name = parts[1]
+                                if tried.has_key(name) is False:
+                                    tried[name] = True
+                                    res = self.resolve_name(req["id"], name)
+                                    glob_dict[name] = res
                                 else:
                                     raise NameError(module)
                     except Exception as e:
@@ -193,6 +218,25 @@ class ZMQWorker(threading.Thread):
                 self._work_socket = zmq.Socket(self._ctx, zmq.REQ)
                 self._work_socket.setsockopt(zmq.HWM,1)
                 self._work_socket.connect(self._server + ":6666")
+    
+    
+    def resolve_name(self, reqid, name):
+        print "Resolving ", name
+        self._request_socket.send_pyobj({
+            "type" : "get_name",
+            "id" : reqid,
+            "name" : name
+        })
+
+        answer = self._request_socket.recv_pyobj()
+
+        if answer["type"] == "import":
+            result = __import__(name)
+            print "   received import"
+        elif answer["type"] == "something":
+            result = pickle.loads(answer["object"])
+            print "   received ",type(result)
+        return result
 
 
     def get_import(self, name, globals, locals, fromlist):
