@@ -1,4 +1,4 @@
-import os
+import os, sys
 import string
 import zmq
 import marshal, new
@@ -6,6 +6,23 @@ import cPickle as pickle
 import threading
 import traceback
 import atexit
+import copy_reg
+import threading
+import __builtin__
+import imp
+import traceback
+
+inc_dir = os.path.expanduser("~/.lazyflow/site-packages")
+
+if os.path.exists(inc_dir) is False:
+    os.makedirs(inc_dir)
+
+if inc_dir not in sys.path:
+    sys.path.append(inc_dir)
+
+
+
+global_import_lock = threading.Lock()
 
 def dump_func_to_string(f):
     if f.func_closure:
@@ -25,7 +42,7 @@ def dump_func_to_string(f):
     return pickle.dumps((marshal.dumps(f.func_code), f.func_defaults, closure, globals_mapping))
 
 
-def load_func_from_string(s, glob_dict):
+def load_func_from_string(s, glob_dict = globals()):
     code, defaults, closure, globals_mapping = pickle.loads(s)
     if closure is not None:
         closure = reconstruct_closure(closure)
@@ -37,6 +54,13 @@ def load_func_from_string(s, glob_dict):
             pass
     return new.function(code, glob_dict, code.co_name, defaults, closure)
 
+def func_pickler(func):
+    return func_unpickler, ( dump_func_to_string(func), )
+
+def func_unpickler(s):
+    return load_func_from_string(s)
+
+copy_reg.pickle(func_pickler.__class__, func_pickler, func_unpickler)
 
 def reconstruct_closure(values):
     ns = range(len(values))
@@ -68,20 +92,20 @@ class ZMQWorker(threading.Thread):
         atexit.register(self.cleanup)
 
     def send_ack(self, req):
-        self._result_socket.send_pyobj({
+        self._notify_socket.send_pyobj({
             "type" : "ack",
             "id" : req["id"],
         })
 
     def send_result(self, req, result):
-        self._result_socket.send_pyobj({
+        self._notify_socket.send_pyobj({
             "type" : "result",
             "id" : req["id"],
             "result" : result
         })
 
     def send_error(self, req, error, tb):
-        self._result_socket.send_pyobj({
+        self._notify_socket.send_pyobj({
             "type" : "error",
             "id" : req["id"],
             "error" : error,
@@ -92,16 +116,21 @@ class ZMQWorker(threading.Thread):
     def send_ready(self):
         self._work_socket.send_pyobj("")
 
-        
+
 
     def run(self):
         self._work_socket = zmq.Socket(self._ctx, zmq.REQ)
         self._work_socket.setsockopt(zmq.HWM,1)
         self._work_socket.connect(self._server + ":6666")
 
-        self._result_socket = zmq.Socket(self._ctx, zmq.PUSH)
-        self._result_socket.setsockopt(zmq.HWM,1)
-        self._result_socket.connect(self._server + ":6667")
+        self._notify_socket = zmq.Socket(self._ctx, zmq.PUSH)
+        self._notify_socket.setsockopt(zmq.HWM,1)
+        self._notify_socket.connect(self._server + ":6667")
+        
+        self._request_socket = zmq.Socket(self._ctx, zmq.REQ)
+        self._request_socket.setsockopt(zmq.HWM,1)
+        self._request_socket.connect(self._server + ":6668")
+
         while self._running:
             self.send_ready()
             received = False
@@ -112,6 +141,8 @@ class ZMQWorker(threading.Thread):
                 if events == zmq.POLLIN:
                     self._current_req = True
                     finished = False
+                    
+                    self._set_import_hook()
                     self._current_req = req = self._work_socket.recv_pyobj()
                     received = True
 
@@ -127,6 +158,7 @@ class ZMQWorker(threading.Thread):
                     kwargs = req["kwargs"]
                     
                     tried = {}
+                    
 
                     try:
                         while not finished:
@@ -145,7 +177,7 @@ class ZMQWorker(threading.Thread):
                     except Exception as e:
                         error = e
                         tb = traceback.format_exc()
-                        
+                    
                     if finished:
                         self.send_result(req,result)
                     else:
@@ -163,6 +195,39 @@ class ZMQWorker(threading.Thread):
                 self._work_socket.connect(self._server + ":6666")
 
 
+    def get_import(self, name, globals, locals, fromlist):
+        print "WORKER: fetching %s from server" % name
+        self._request_socket.send_pyobj({
+            "type" : "import",
+            "name" : name, 
+            "globals" : globals,
+            "locals" : locals,
+            "fromlist" : fromlist
+        })
+        error, files = self._request_socket.recv_pyobj()
+
+        for mod in files:
+            fname = string.split(mod[1],"/")[-1]
+            if fname in ["__init__.py", "__init__.pyc"]:
+                fdir = inc_dir + "/" + mod[0].replace(".","/") + "/"
+            else:
+                fdir = inc_dir + "/" + string.join(string.split(mod[0],".")[:-1], "/")
+
+            print "      writing", fdir + fname
+            if not os.path.exists(fdir):
+                os.makedirs(fdir)
+            f = open(fdir + fname, "w")
+            f.write(mod[2])
+            f.close()
+
+        return error
+
+    def _set_import_hook(self):
+        if __builtin__.__import__ != import_hook:
+            __builtin__.__import__ = import_hook
+
+    
+
     def cleanup(self):
         self._running = False
         self._work_socket.close(0)
@@ -170,5 +235,35 @@ class ZMQWorker(threading.Thread):
             while self._current_req == True:
                 time.sleep(0.01)
             self.send_error(self._current_req, "WORKER SHUTDOWN", "WORKER SHUTDOWN")
-        self._result_socket.close(-1)
+        self._notify_socket.close(-1)
 
+
+
+
+# save original import
+original_import = __builtin__.__import__
+
+
+# Replacement for __import__()
+def import_hook(name, globals=None, locals=None, fromlist=None, *args, **kwargs):
+    local_globs = {}
+    cur_tr = threading.current_thread()
+    if isinstance(cur_tr, ZMQWorker):
+        if globals is not None:
+            if globals.has_key("__name__"):
+                local_globs["__name__"] = globals["__name__"]
+            if globals.has_key("__path__"):
+                local_globs["__path__"] = globals["__path__"]
+        try:
+            m = original_import(name, local_globs, locals, fromlist)
+        except ImportError:
+            # try fetching from master
+            error = cur_tr.get_import(name, local_globs, None, fromlist)
+            # if import on server failed, reraise here on worker
+            if error:
+                raise error
+            m = import_hook(name, local_globs, locals, fromlist)
+    else:
+        m = original_import(name, local_globs, locals, fromlist)
+    
+    return m

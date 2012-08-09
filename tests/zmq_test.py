@@ -15,18 +15,27 @@ class OpA(Operator):
         self.out.meta.dtype = object
 
     def execute(self, slot, roi, result):
+
+        def blabb( x):
+            print x
+
+
         
-        def blubb( a, b, nr):
+        def blubb( a, b, nr, rest = None):
+            print type(rest)
             test = np.ndarray((100,200))
             time.sleep(random.random())
             result = a + b
-            print "Worker: Request %d finished" % nr
+            blabb("WORKER: Request %d finished" % nr)
+            #brabbel("brabbel")
             return result
 
         a = numpy.ndarray((10,2))
         b = numpy.ndarray((10,2))
         a[:] = 1
         b[:] = 2
+        
+        from bottle import static_file
 
         requests = []
         for i in range(request_count):

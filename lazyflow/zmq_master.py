@@ -6,6 +6,7 @@ import cPickle as pickle
 import zmq
 from zmq_worker import dump_func_to_string
 from collections import deque
+import __builtin__
 
 
 class ZMQMasterWork(threading.Thread):
@@ -38,31 +39,31 @@ class ZMQMasterWork(threading.Thread):
             pass
         found_worker = False
         while found_worker is False:
-            events = self._zmq_socket_work.poll(self._timeout) 
+            events = self._work_socket.poll(self._timeout) 
             if events == zmq.POLLIN:
-                token = self._zmq_socket_work.recv_pyobj()
+                token = self._work_socket.recv_pyobj()
                 self._requests[id(request)] = request
                 print "   sending..."
-                self._zmq_socket_work.send_pyobj({ 'id': id(request), 'function' : dump_func_to_string(request.function), 'kwargs': request.kwargs})
+                self._work_socket.send_pyobj({ 'id': id(request), 'function' : dump_func_to_string(request.function), 'kwargs': request.kwargs})
                 print "   done"
                 self._watchdog.watch(request) # add request to watchdog
                 found_worker = True
             else:
                 # if no free worker is found within timeout, reset connection
                 print "No free worker - resetting"
-                self._zmq_socket_work.close(-1)
+                self._work_socket.close(-1)
                 self._zmq_ctx.term()
                 self._zmq_ctx = zmq.Context()
-                self._zmq_socket_work = zmq.Socket(self._zmq_ctx, zmq.REP)
-                self._zmq_socket_work.bind("tcp://*:6666")
-                self._zmq_socket_work.setsockopt(zmq.HWM,1)
+                self._work_socket = zmq.Socket(self._zmq_ctx, zmq.REP)
+                self._work_socket.bind("tcp://*:6666")
+                self._work_socket.setsockopt(zmq.HWM,1)
 
 
     def run(self):
-        self._zmq_socket_work = zmq.Socket(self._zmq_ctx, zmq.REP)
-        #self._zmq_socket_work.setsockopt(zmq.IDENTITY, "LAZYFLOW")
-        self._zmq_socket_work.bind("tcp://*:6666")
-        self._zmq_socket_work.setsockopt(zmq.HWM,1)
+        self._work_socket = zmq.Socket(self._zmq_ctx, zmq.REP)
+        #self._work_socket.setsockopt(zmq.IDENTITY, "LAZYFLOW")
+        self._work_socket.bind("tcp://*:6666")
+        self._work_socket.setsockopt(zmq.HWM,1)
         while self._running:
             self._wlock.acquire()
             try:
@@ -77,10 +78,10 @@ class ZMQMasterWork(threading.Thread):
               self._send_request(out_req)
 
         # notify workers of master shutdown
-        while self._zmq_socket_work.poll(500) != 0:
+        while self._work_socket.poll(500) != 0:
             print("resetting worker")
-            token = self._zmq_socket_work.recv_pyobj()
-            self._zmq_socket_work.send_pyobj(None)
+            token = self._work_socket.recv_pyobj()
+            self._work_socket.send_pyobj(None)
 
     def stop(self):
         self._running = False
@@ -138,7 +139,12 @@ class ZMQWatchDog(threading.Thread):
     
 
 
-class ZMQMasterResults(threading.Thread):
+
+
+
+
+
+class ZMQMasterNotifications(threading.Thread):
     def __init__(self, threadpool, request_dict):
         threading.Thread.__init__(self)
         self.daemon = True
@@ -151,12 +157,12 @@ class ZMQMasterResults(threading.Thread):
 
 
     def run(self):
-        self._zmq_socket_results = zmq.Socket(self._zmq_ctx, zmq.PULL)
-        self._zmq_socket_results.bind("tcp://*:6667")
+        self._notify_socket = zmq.Socket(self._zmq_ctx, zmq.PULL)
+        self._notify_socket.bind("tcp://*:6667")
         while self._running:
-            events = self._zmq_socket_results.poll(50) # check every 50ms for thread stop
+            events = self._notify_socket.poll(50) # check every 50ms for thread stop
             if events != 0:
-                msg = self._zmq_socket_results.recv_pyobj()
+                msg = self._notify_socket.recv_pyobj()
                 if not self._requests.has_key(msg['id']):
                     print "Master: obtained results for unknown request %r, silently dropping..." % msg['id']
                     continue
@@ -183,5 +189,76 @@ class ZMQMasterResults(threading.Thread):
     def stop(self):
         self._running = False
         self.join()
-        
 
+
+
+
+class ZMQMasterRequests(threading.Thread):
+    def __init__(self, threadpool, request_dict):
+        threading.Thread.__init__(self)
+        self.daemon = True
+        self._threadpool = threadpool
+
+        self._zmq_ctx = zmq.Context.instance()
+        self._running = True
+        self._requests = request_dict
+
+
+    def run(self):
+        self._request_socket = zmq.Socket(self._zmq_ctx, zmq.REP)
+        self._request_socket.bind("tcp://*:6668")
+        while self._running:
+            events = self._request_socket.poll(50) # check every 50ms for thread stop
+            if events != 0:
+                msg = self._request_socket.recv_pyobj()
+                if msg["type"] == "import":
+                    print "MASTER: resolving import dependencies for %s" % msg["name"]
+                    answer = self.get_import_dependencies(msg)
+                    self._request_socket.send_pyobj(answer)
+
+
+    def _import_hook(self, name, globals=None, locals=None, fromlist=None, *args, **kwargs):
+        m = self.original_import(name, globals, locals, fromlist, *args, **kwargs)
+        if hasattr(m, "__file__"):
+            f = open(m.__file__, "r")
+            content = f.read()
+            self.import_chain.append([m.__name__, m.__file__, content])
+
+            # restore original hook after first valid file
+            __builtin__.__import__ = self.original_import
+        
+        return m
+
+
+
+    def get_import_dependencies(self, msg):
+        self.import_chain = []
+
+        # Save the original hooks
+        self.original_import = __builtin__.__import__
+
+        # Now install our hook
+        __builtin__.__import__ = self._import_hook
+        error = None
+
+        try:
+            __import__(msg["name"], msg["globals"], msg["locals"], msg["fromlist"])
+        except Exception as e:
+            error = e
+
+
+        # restore original hook
+        __builtin__.__import__ = self.original_import
+
+        print "   IMPORT CHAIN"
+        for i in self.import_chain:
+            print "      ",i[0], i[1]
+
+
+        return error, self.import_chain
+
+
+
+    def stop(self):
+        self._running = False
+        self.join()
