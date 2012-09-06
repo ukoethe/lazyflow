@@ -22,10 +22,6 @@ if os.path.exists(inc_dir) is False:
 if inc_dir not in sys.path:
     sys.path.append(inc_dir)
 
-
-
-global_import_lock = threading.Lock()
-
 def dump_func_to_string(f):
     if f.func_closure:
         closure = tuple(c.cell_contents for c in f.func_closure)
