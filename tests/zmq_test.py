@@ -1,5 +1,5 @@
 import lazyflow
-from lazyflow.graph import Operator, InputSlot, OutputSlot
+from lazyflow.graph import Operator, InputSlot, OutputSlot, Graph
 from lazyflow.request import Request
 from lazyflow.zmq_worker import ZMQWorker
 import numpy as np
@@ -22,7 +22,7 @@ class OpA(Operator):
         self.out.meta.shape = (1,)
         self.out.meta.dtype = object
 
-    def execute(self, slot, roi, result):
+    def execute(self, slot, subindex, roi, result):
 
         def blabb( x):
             print x
@@ -60,8 +60,8 @@ class OpA(Operator):
 
         return result
 
-
-op = OpA()
+g = Graph()
+op = OpA( graph=g )
 
 result = op.out[0].wait()
 print "Operator returned"
