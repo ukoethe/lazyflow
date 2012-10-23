@@ -3,14 +3,7 @@ import threading
 from lazyflow.graph import *
 import copy
 
-from lazyflow.operators.operators import OpArrayPiper
-from lazyflow.operators.vigraOperators import *
-from lazyflow.operators.valueProviders import *
-from lazyflow.operators.classifierOperators import *
-from lazyflow.operators.generic import *
-
-from lazyflow import operators
-
+from lazyflow.operators import *
 
 def test1():
 
@@ -18,11 +11,11 @@ def test1():
     g = Graph()
 
 
-    Op = operators.OpBlockedArrayCache(g)
+    Op = operators.OpBlockedArrayCache(graph=g)
 
     inputImage = vigra.impex.readImage("ostrich.jpg")
 
-    opPiper = OpArrayPiper(g)
+    opPiper = OpArrayPiper(graph=g)
     opPiper.inputs["Input"].setValue(inputImage)
 
     Op.inputs["Input"].connect(opPiper.outputs["Output"])
@@ -110,7 +103,7 @@ def operatorTest(blockShape, sync = False, cache = False):
     g = Graph()
 
 
-    op = operators.OpBlockedArrayCache(g)
+    op = operators.OpBlockedArrayCache(graph=g)
     inputImage = vigra.impex.readImage("ostrich.jpg")
     op.inputs["Input"].setValue(inputImage)
     op.inputs["outerBlockShape"].setValue(blockShape)
@@ -125,13 +118,13 @@ def operatorTest(blockShape, sync = False, cache = False):
         #imageCounter +=1
 
     if cache:
-        tempOp = OpArrayCache(g)
+        tempOp = OpArrayCache(graph=g)
         tempOp.inputs["Input"].connect(op.outputs["Output"])
 
         op = tempOp
 
     #fragmented image
-    img1 = numpy.zeros(op.outputs["Output"]._shape , numpy.float32)
+    img1 = numpy.zeros(op.outputs["Output"].meta.shape , numpy.float32)
 
     start = []
     stop = []
@@ -140,7 +133,7 @@ def operatorTest(blockShape, sync = False, cache = False):
         stop.append(numpy.array(img1.shape)[i])
 
     requests = []
-    imgP = numpy.zeros(op.outputs["Output"]._shape , numpy.float32)
+    imgP = numpy.zeros(op.outputs["Output"].meta.shape , numpy.float32)
 
     arraySplitter(op,img1,start[:],stop[:], requests, notify, sync = sync)
 

@@ -3,7 +3,7 @@ This operator returns a subregion of the Input Slot.
 To make this operator work one has to connect the InputSlot("Input") with an
 OutputSlot of another operator, e.g. vimageReader and set values for the
 InputSlots("region_start") and ("region_stop"). When all InputSlots of an
-operator are connected or set, the "notifyConnectAll" method is called implicit.
+operator are connected or set, the "setupOutputs" method is called implicit.
 Here one can do different checkings (e.g. verfying that the element-wise values of
 region_stop are greater than region_start) and define the type, shape and axistags
 of the Output Slot of the operator.
@@ -15,6 +15,7 @@ import threading
 from lazyflow.graph import *
 import copy
 
+from lazyflow.roi import roiToSlice
 from lazyflow.operators.operators import OpArrayPiper
 from lazyflow.operators.vigraOperators import *
 from lazyflow.operators.valueProviders import *
@@ -35,7 +36,7 @@ class OpSubregion(Operator):
 
     #this method is called when all InputSlot, in this example three,
     #are connected with an OutputSlot or a value is set.
-    def notifyConnectAll(self):
+    def setupOutputs(self):
         #new name for the InputSlot("Input")
         inputSlot = self.inputs["Input"]
 
@@ -43,23 +44,24 @@ class OpSubregion(Operator):
         stop = numpy.array(self.inputs["region_stop"].value)
 
         assert (stop>=start).all()
-        assert (stop <= numpy.array(self.inputs["Input"].shape )).all()
+        assert (stop <= numpy.array(self.inputs["Input"].meta.shape )).all()
         assert (start >= start - start).all()
 
         #define the type, shape and axistags of the Output-Slot
-        self.outputs["Output"]._dtype = inputSlot.dtype
-        self.outputs["Output"]._shape = tuple(stop - start)
-        self.outputs["Output"]._axistags = copy.copy(inputSlot.axistags)
+        self.outputs["Output"].meta.dtype = inputSlot.meta.dtype
+        self.outputs["Output"].meta.shape = tuple(stop - start)
+        self.outputs["Output"].meta.axistags = copy.copy(inputSlot.meta.axistags)
 
     #this method calculates the shifting
-    def getOutSlot(self, slot, key, result):
+    def execute(self, slot, subindex, roi, result):
+        key = roiToSlice(roi.start,roi.stop)
 
         #subregion start and stop
         start = self.inputs["region_start"].value
         stop = self.inputs["region_stop"].value
 
         #get start and stop coordinates
-        ostart, ostop = sliceToRoi(key, self.shape)
+        ostart, ostop = sliceToRoi(key, slot.meta.shape)
         #calculate the new reading start and stop coordinates
         rstart = start + ostart
         rstop  = start + ostop
@@ -77,32 +79,33 @@ class OpSubregion(Operator):
         res = req.wait()
         return res
 
-    def notifyDirty(self,slot,key):
+    def propagateDirty(self, slot, subindex, roi):
+        key = roi.toSlice()
         self.outputs["Output"].setDirty(key)
 
     @property
     def shape(self):
-        return self.outputs["Output"]._shape
+        return self.outputs["Output"].meta.shape
 
     @property
     def dtype(self):
-        return self.outputs["Output"]._dtype
+        return self.outputs["Output"].meta.dtype
 
 if __name__=="__main__":
     #create new Graphobject
     g = Graph(numThreads = 1, softMaxMem = 2000*1024**2)
 
     #create ImageReader-Operator
-    vimageReader = OpImageReader(g)
+    vimageReader = OpImageReader(graph=g)
     #read an image
     vimageReader.inputs["Filename"].setValue("/net/gorgonzola/storage/cripp/lazyflow/tests/ostrich.jpg")
 
     #create Subregion_Operator with Graph-Objekt as argument
-    subregion = OpSubregion(g)
+    subregion = OpSubregion(graph=g)
 
     #connect Subregion-Input with Image Reader Output
     subregion.inputs["Input"].connect(vimageReader.outputs["Image"])
-    #set values for the InputSlots, after this, the "notifyConnectAll" method is executed
+    #set values for the InputSlots, after this, the "setupOutputs" method is executed
     #because now all the InputSlot are set or connected
     subregion.inputs["region_start"].setValue((100,100,0))
     subregion.inputs["region_stop"].setValue((300,300,3))
@@ -111,13 +114,13 @@ if __name__=="__main__":
     #its method "allocate" will be executed, this method call the "writeInto"
     #method which calls the "fireRequest" method of the, in this case,
     #"OutputSlot" object which calls another method in "OutputSlot and finally
-    #the "getOutSlot" method of our operator.
+    #the "execute" method of our operator.
     #The wait() function blocks other activities and waits till the results
     # of the requested Slot are calculated and stored in the result area.
     subregion.outputs["Output"][:].allocate().wait()
 
     #create Image Writer
-    vimageWriter = OpImageWriter(g)
+    vimageWriter = OpImageWriter(graph=g)
     #set writing path
     vimageWriter.inputs["Filename"].setValue("/net/gorgonzola/storage/cripp/lazyflow/lazyflow/examples/subregion_result.jpg")
     #connect Writer-Input with Subregion Operator-Output

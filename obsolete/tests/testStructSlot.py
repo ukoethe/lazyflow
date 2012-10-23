@@ -15,13 +15,13 @@ class A(graph.Operator):
     tgraph = graph.OutputSlot(stype=GraphType)
 
     def setupOutputs(self):
-        self.tgraph.nodes._shape = (10,20)
-        self.tgraph.nodes._dtype = numpy.uint8
-        self.tgraph.edges._shape = (10,20)
-        self.tgraph.edges._dtype = numpy.uint8
+        self.tgraph.nodes.meta.shape = (10,20)
+        self.tgraph.nodes.meta.dtype = numpy.uint8
+        self.tgraph.edges.meta.shape = (10,20)
+        self.tgraph.edges.meta.dtype = numpy.uint8
 
 
-    def execute(self,slot,roi,result):#
+    def execute(self, slot, subindex, roi, result):
         if slot == self.tgraph.nodes:
             result[:] = 0
         elif slot == self.tgraph.edges:
@@ -36,7 +36,7 @@ class B(graph.Operator):
     output = graph.OutputSlot(stype=stype.ArrayLike)
 
     def setupOutputs(self):
-        self.output._shape = (1,)
+        self.output.meta.shape = (1,)
 
     def execute(self,slot,roi,destination):
         nodes = self.tgraph.nodes[:].allocate().wait()
@@ -49,8 +49,8 @@ class B(graph.Operator):
 
 
 g = graph.Graph()
-a = A(g)
-b = B(g)
+a = A(graph=g)
+b = B(graph=g)
 
 b.tgraph.connect(a.tgraph)
 

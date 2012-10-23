@@ -4,6 +4,7 @@ import time
 import lazyflow
 from lazyflow.graph import *
 from lazyflow import operators
+from lazyflow.request import Request, Pool
 
 doProfile = False
 if doProfile:
@@ -13,6 +14,7 @@ g = Graph()
 
 mcount = 20000
 mcountf = 500
+
 lock = threading.Lock()
 eventA = threading.Event()
 eventB = threading.Event()
@@ -61,16 +63,16 @@ class C(object):
         return self.array[key]
 
 
-cache = operators.OpArrayCache(g)
-p = operators.OpArrayPiper(g)
+cache = operators.OpArrayCache(graph=g)
+p = operators.OpArrayPiper(graph=g)
 
 
 arr = numpy.ndarray((100,100,100,1),numpy.uint8)
 
 cache.inputs["Input"].setValue(arr)
-p.connect(Input = cache.outputs["Output"])
+p.Input.connect(cache.outputs["Output"])
 
-features = operators.OpPixelFeaturesPresmoothed(g)
+features = operators.OpPixelFeaturesPresmoothed(graph=g)
 matrix = numpy.ndarray((6,2), numpy.uint8)
 matrix[:] = 0
 matrix[0,:] = 1
@@ -78,7 +80,7 @@ features.inputs["Scales"].setValue((1.0,3.0))
 features.inputs["Input"].connect(cache.outputs["Output"])
 features.inputs["Matrix"].setValue(matrix)
 
-print features.Output.axistags
+print features.Output.meta.axistags
 
 t1 = time.time()
 for i in range(0,mcount):
@@ -186,3 +188,42 @@ print "                                %0.3fms latency" % ((t2-t1)*1e3/mcountf,)
 if doProfile:
     yappi.stop()
     yappi.print_stats(sort_type = yappi.SORTTYPE_TTOT)
+
+
+
+
+
+def empty_func(b):
+    a = 7 + b
+    a = "lksejhkl JSFLAJSSDFJH   AKDHAJKSDH ADKJADHK AJHSKA AKJ KAJSDH AKDAJHSKAJHD KASHDAKDJH".split(" ")
+
+t1 = time.time()
+
+requests = []
+for i in range(50000):
+    req = Request(empty_func, b = 11)
+    req.submit()
+
+for r in requests:
+    r.wait()
+
+t2 = time.time()
+print "\n\n"
+print "LAZYFLOW REQUEST WAIT:   %f seconds for %d iterations" % (t2-t1,mcount)
+print "                                %0.3fms latency" % ((t2-t1)*1e3/mcount,)
+
+
+t1 = time.time()
+
+pool = Pool()
+
+for i in range(50000):
+    pool.request(empty_func, b = 11)
+
+pool.wait()
+
+t2 = time.time()
+print "\n\n"
+print "LAZYFLOW POOL WAIT:   %f seconds for %d iterations" % (t2-t1,mcount)
+print "                                %0.3fms latency" % ((t2-t1)*1e3/mcount,)
+

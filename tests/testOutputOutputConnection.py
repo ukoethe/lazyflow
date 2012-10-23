@@ -1,16 +1,15 @@
 import nose
-from lazyflow import graph
-from lazyflow.graph import Operator
+from lazyflow.graph import Graph, Operator, InputSlot, OutputSlot
 from lazyflow import stype
 from lazyflow import operators
 
-class OpOuter(graph.Operator):
+class OpOuter(Operator):
 
-    Input = graph.InputSlot()
-    Output = graph.OutputSlot()
+    Input = InputSlot()
+    Output = OutputSlot()
 
     def __init__(self, graph):
-        Operator.__init__(self, graph)
+        Operator.__init__(self, graph=graph)
         self._was_executed = False
         self._inner_op = OpInner(self)
 
@@ -21,34 +20,35 @@ class OpOuter(graph.Operator):
         self.Output.meta.shape = self.Input.meta.shape
         self.Output.meta.dtype = self.Input.meta.dtype
 
-    def execute(self, slot, roi, result):
+    def execute(self, slot, subindex, roi, result):
         self._was_executed = True
         result[0] = self.Input[:].allocate().wait()[0]
         return result
 
+    def propagateDirty(self, inputSlot, subindex, roi):
+        self.Output.setDirty(roi)
 
-class OpInner(graph.Operator):
+class OpInner(Operator):
 
-    Input = graph.InputSlot()
-    Output = graph.OutputSlot()
+    Input = InputSlot()
+    Output = OutputSlot()
 
     def setupOutputs(self):
         self.Output.meta.shape = self.Input.meta.shape
         self.Output.meta.dtype = self.Input.meta.dtype
 
-    def execute(self, slot, roi, result):
+    def execute(self, slot, subindex, roi, result):
         result[0] = self.Input[:].allocate().wait()[0]
         return result
 
-
-
-
+    def propagateDirty(self, inputSlot, subindex, roi):
+        self.Output.setDirty(roi)
 
 class TestOutputOutputConnection(object):
 
     def setUp(self):
-        self.g = graph.Graph()
-        self.op = OpOuter(self.g)
+        self.g = Graph()
+        self.op = OpOuter(graph=self.g)
 
     def tearDown(self):
         self.g.stopGraph()
@@ -76,3 +76,10 @@ class TestOutputOutputConnection(object):
         self.op._was_executed = False
         result = self.op.Output[:].allocate().wait()[0]
         assert self.op._was_executed is False
+
+if __name__ == "__main__":
+    import sys
+    import nose
+    sys.argv.append("--nocapture")    # Don't steal stdout.  Show it on the console as usual.
+    sys.argv.append("--nologcapture") # Don't set the logging level to DEBUG.  Leave it alone.
+    nose.run(defaultTest=__file__)

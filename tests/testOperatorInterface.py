@@ -4,6 +4,7 @@ from lazyflow import graph
 from lazyflow import stype
 from lazyflow import operators
 import numpy
+from lazyflow.graph import OperatorWrapper
 
 class OpA(graph.Operator):
     name = "OpA"
@@ -11,7 +12,7 @@ class OpA(graph.Operator):
     Input1 = graph.InputSlot()                # required slot
     Input2 = graph.InputSlot(optional = True) # optional slot
     Input3 = graph.InputSlot(value = 3)       # required slot with default value, i.e. already connected
-    Input4 = graph.MultiInputSlot(level = 1)       # required slot with default value, i.e. already connected
+    Input4 = graph.InputSlot(level = 1)       # required slot with default value, i.e. already connected
 
     Output1 = graph.OutputSlot()
     Output2 = graph.OutputSlot()
@@ -30,9 +31,9 @@ class OpA(graph.Operator):
         self.Output2.meta.dtype = self.Input1.meta.dtype
         self.Output3.meta.shape = self.Input1.meta.shape
         self.Output3.meta.dtype = self.Input1.meta.dtype
-        print "OpInternal shape=%r, dtype=%r" % (self.Input1.meta.shape, self.Input1.meta.dtype)
+        #print "OpInternal shape=%r, dtype=%r" % (self.Input1.meta.shape, self.Input1.meta.dtype)
 
-    def execute(self, slot, roi, result):
+    def execute(self, slot, subindex, roi, result):
         if slot == self.Output1:
             result[0] = self.Input1[:].allocate().wait()[0]
         elif slot == self.Output2:
@@ -41,8 +42,59 @@ class OpA(graph.Operator):
             result[0] = self.Input3[:].allocate().wait()[0]
         return result
 
+    def propagateDirty(self, inputSlot, subindex, roi):
+        if inputSlot == self.Input1:
+            self.Output1.setDirty(roi)
+        if inputSlot == self.Input1:
+            self.Output2.setDirty(roi)
+        if inputSlot == self.Input3:
+            self.Output3.setDirty(roi)
 
+class OpTesting5ToMulti(graph.Operator):
+    name = "OpTesting5ToMulti"
 
+    inputSlots = []
+    for i in xrange(5):
+        inputSlots.append(graph.InputSlot("Input%.1d"%(i), optional = True))
+    outputSlots = [graph.OutputSlot("Outputs", level=1)]
+
+    def setupOutputs(self):
+        length = 0
+        for slot in self.inputs.values():
+            if slot.connected():
+                length += 1
+
+        self.outputs["Outputs"].resize(length)
+
+        i = 0
+        for sname in sorted(self.inputs.keys()):
+            slot = self.inputs[sname]
+            if slot.connected():
+                self.outputs["Outputs"][i].meta.assignFrom( slot.meta )
+                i += 1
+
+    def execute(self, slot, subindex, roi, result):
+        key = roiToSlice(roi.start, roi.stop)
+        index = subindex[0]
+        i = 0
+        for sname in sorted(self.inputs.keys()):
+            slot = self.inputs[sname]
+            if slot.connected():
+                if i == index:
+                    return slot[key].allocate().wait()
+                i += 1
+
+    def propagateDirty(self, islot, subindex, roi):
+        i = 0
+        for sname in sorted(self.inputs.keys()):
+            slot = self.inputs[sname]
+            if slot == islot:
+                self.outputs["Outputs"][i].setDirty(roi)
+                break
+            if slot.connected():
+                self.outputs["Outputs"][i].meta.assignFrom( slot.meta )
+                i += 1
+    
 
 class TestOperator_setupOutputs(object):
 
@@ -55,7 +107,7 @@ class TestOperator_setupOutputs(object):
     def test_disconnected_connected(self):
         # check that operator is not configuerd initiallia
         # since it has a slot without default value
-        op = OpA(self.g)
+        op = OpA(graph=self.g)
         assert op._configured == False
 
         # check that operator is not configuerd initiallia
@@ -77,7 +129,7 @@ class TestOperator_setupOutputs(object):
 
 
     def test_set_values(self):
-        op = OpA(self.g)
+        op = OpA(graph=self.g)
 
         # check that Input4 is not connected
         assert op.Input4.connected() is False
@@ -107,7 +159,7 @@ class TestOperator_setupOutputs(object):
         assert op.Input4[1].value == 3
 
     def test_default_value(self):
-        op = OpA(self.g)
+        op = OpA(graph=self.g)
         op.Input1.setValue(1)
         op.Input4.setValues([1])
 
@@ -129,10 +181,10 @@ class TestOperator_setupOutputs(object):
         # check that connecting a required slot to an
         # already configured slots notifes the operator
         # of connecting
-        op1 = OpA(self.g)
+        op1 = OpA(graph=self.g)
         op1.Input1.setValue(1)
         op1.Input4.setValues([1])
-        op2 = OpA(self.g)
+        op2 = OpA(graph=self.g)
         op2.Input1.connect(op1.Output1)
         op2.Input4.setValues([1])
         assert op2._configured == True
@@ -143,14 +195,52 @@ class TestOperator_setupOutputs(object):
         # not yet  configured slots notifes the operator
         # of connecting after configuring the first operator
         # in the chain
-        op1 = OpA(self.g)
+        op1 = OpA(graph=self.g)
         op1.Input4.setValues([1])
-        op2 = OpA(self.g)
+        op2 = OpA(graph=self.g)
         op2.Input1.connect(op1.Output1)
         op2.Input4.setValues([1])
         assert op2._configured == False
         op1.Input1.setValue(1)
         assert op2._configured == True
+
+
+class OpMultiOutput(graph.Operator):
+    Input = graph.InputSlot()
+    Outputs = graph.OutputSlot(level=3)
+    
+    def __init__(self, *args, **kwargs):
+        super(OpMultiOutput, self).__init__(*args, **kwargs)
+
+    def setupOutputs(self):
+        self.Outputs.resize(4)
+        for i, s in enumerate(self.Outputs):
+            s.resize(4)
+            for j, t in enumerate(s):
+                t.resize(4)
+                for k,u in enumerate(t):
+                    u.meta.assignFrom(self.Input.meta)                    
+
+    def execute(self, slot, subindex, roi, result):
+        """Result of the output slot is the subslot's subindex."""
+        assert slot == self.Outputs
+        result[0] = subindex
+        return result
+
+    def propagateDirty(self, inputSlot, subindex, roi):
+        pass
+
+class TestOperatorMultiSlotExecute(object):
+    def setup(self):
+        self.g = graph.Graph()
+    
+    def test(self):
+        op = OpMultiOutput(graph=self.g)
+        op.Input.setValue( () )
+        # Index the output slot with every possible getitem syntax that we support
+        assert op.Outputs[1][2][3][...].wait()[0] == (1,2,3)
+        assert op.Outputs[3,2,1][...].wait()[0] == (3,2,1)
+        assert op.Outputs[(2,1,3)][...].wait()[0] == (2,1,3)
 
 class TestOperator_meta(object):
 
@@ -165,10 +255,10 @@ class TestOperator_meta(object):
         # already configured slots notifes the operator
         # of connecting and the meta information of
         # is correctly passed on between the slots
-        op1 = OpA(self.g)
+        op1 = OpA(graph=self.g)
         op1.Input1.setValue(numpy.ndarray((10,)))
         op1.Input4.setValues([1])
-        op2 = OpA(self.g)
+        op2 = OpA(graph=self.g)
         op2.Input1.connect(op1.Output1)
         op2.Input4.setValues([1])
         assert op2.Output1.meta.shape == (10,)
@@ -180,8 +270,8 @@ class TestOperator_meta(object):
         # of connecting after configuring the first operator
         # and propagates the meta information correctly
         # between the slots
-        op1 = OpA(self.g)
-        op2 = OpA(self.g)
+        op1 = OpA(graph=self.g)
+        op2 = OpA(graph=self.g)
         op1.Input4.setValues([1,2])
         op2.Input4.setValues([1,2])
         op2.Input1.connect(op1.Output1)
@@ -191,16 +281,17 @@ class TestOperator_meta(object):
         assert op2.Output1.meta.shape == (20,)
 
 class OpWithMultiInputs(graph.Operator):
-    Input = graph.MultiInputSlot()
-    Output = graph.MultiOutputSlot()
+    Input = graph.InputSlot(level=1)
+    Output = graph.OutputSlot(level=1)
 
     def setupOutputs(self):
         self.Output.resize(len(self.Input))
 
-    def getSubOutSlot(self, slots, indexes, key, result):
-        slot = slots[0]
+    def execute(self, slot, subindex, roi, result):
+        key = roi.toSlice()
+        index = subindex[0]
         if slot.name == "Output":
-            result[...] = self.Input[indexes[0]][key]
+            result[...] = self.Input[index][key]
 
 class TestMultiSlotResize(object):
     def setUp(self):
@@ -208,8 +299,8 @@ class TestMultiSlotResize(object):
         self.op1 = OpWithMultiInputs(graph=self.g)
         self.op2 = OpWithMultiInputs(graph=self.g)
 
-        self.wrappedOp = OpA(graph=self.g)
-        # Connect multi-inputs to the single inputs to induce wrapping
+        self.wrappedOp = OperatorWrapper( OpA, graph=self.g )
+        
         self.wrappedOp.Input1.connect(self.op1.Input)
         self.wrappedOp.Input2.connect(self.op2.Input)
 
@@ -223,6 +314,9 @@ class TestMultiSlotResize(object):
 class OpDirectConnection(graph.Operator):
     Input = graph.InputSlot()
     Output = graph.OutputSlot()
+    
+    def propagateDirty(self, inputSlot, subindex, roi):
+        pass
     
     def setupOutputs(self):
         self.Output.connect( self.Input )
@@ -250,8 +344,8 @@ class TestSlotStates(object):
             connectedSlots[slot] = True
         
         # Test notifyConnect
-        op.Input.notifyConnect( handleConnect )
-        op.Output.notifyConnect( handleConnect )
+        op.Input._notifyConnect( handleConnect )
+        op.Output._notifyConnect( handleConnect )
         
         readySlots = { op.Input  : False,
                        op.Output : False }
@@ -290,8 +384,8 @@ class TestSlotStates(object):
             connectedSlots[slot] = True
         
         # Test notifyConnect
-        op.Input.notifyConnect( handleConnect )
-        op.Output.notifyConnect( handleConnect )
+        op.Input._notifyConnect( handleConnect )
+        op.Output._notifyConnect( handleConnect )
         
         readySlots = { op.Input  : False,
                        op.Output : False }
@@ -319,7 +413,7 @@ class TestSlotStates(object):
         
     def test_implicitlyConnectedMultiOutputs(self):
         # The array piper copies its input to its output, creating an "implicit" connection
-        op = operators.Op5ToMulti(graph=self.g)
+        op = OpTesting5ToMulti(graph=self.g)
         
         assert not op.Input0.connected()
         assert not op.Outputs.connected()
@@ -332,8 +426,8 @@ class TestSlotStates(object):
             connectedSlots.add(slot)
         
         # Test notifyConnect
-        op.Input0.notifyConnect( handleConnect )
-        op.Outputs.notifyConnect( handleConnect )
+        op.Input0._notifyConnect( handleConnect )
+        op.Outputs._notifyConnect( handleConnect )
         
         readySlots = set()
         def handleReady(slot):
@@ -396,8 +490,8 @@ class TestSlotStates(object):
             connectedSlots[slot] = True
         
         # Test notifyConnect
-        op.Input.notifyConnect( handleConnect )
-        op.Output.notifyConnect( handleConnect )
+        op.Input._notifyConnect( handleConnect )
+        op.Output._notifyConnect( handleConnect )
         
         readySlots = { op.Input  : False,
                        op.Output : False }
@@ -485,8 +579,11 @@ class TestSlotStates(object):
         assert b.shape == a.shape
 
 if __name__ == "__main__":
+    import sys
     import nose
-    nose.run( defaultTest=__file__, env={'NOSE_NOCAPTURE' : 1} )
+    sys.argv.append("--nocapture")    # Don't steal stdout.  Show it on the console as usual.
+    sys.argv.append("--nologcapture") # Don't set the logging level to DEBUG.  Leave it alone.
+    nose.run(defaultTest=__file__)
 
 #    test = TestSlotStates()
 #    test.setup()    

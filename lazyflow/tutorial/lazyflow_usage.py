@@ -28,7 +28,7 @@ g = Graph()
 #    All operators must receive as first argument
 #    the graph to which they will belong
 
-reader = operators.OpImageReader(g)
+reader = operators.OpImageReader(graph=g)
 
 #    To configure the image reader operator we
 #    must provide a filename.
@@ -51,7 +51,7 @@ reader.inputs["Filename"].setValue("ostrich.jpg")
 #    its inputs to its outputs
 
 
-noOp = operators.OpArrayPiper(g)
+noOp = operators.OpArrayPiper(graph=g)
 
 noOp.inputs["Input"].connect(reader.outputs["Image"])
 
@@ -148,7 +148,7 @@ imshow(result2)
 #    on the output side is the OpSubRegion operator
 #    which selects a subwindow of its input
 
-subwin = operators.OpSubRegion(g)
+subwin = operators.OpSubRegion(graph=g)
 subwin.inputs["Input"].connect(reader.outputs["Image"])
 
 #    next we define the subwindow which it should select:
@@ -169,13 +169,13 @@ imshow(result3)
 #    you can inspect the shape of an output slot by
 #    printing its shape property:
 
-print "reader.outputs[\"Image\"].shape :", reader.outputs["Image"].shape
-print "subwin.outputs[\"Output\"].shape :", subwin.outputs["Output"].shape
+print "reader.outputs[\"Image\"].meta.shape :", reader.outputs["Image"].meta.shape
+print "subwin.outputs[\"Output\"].meta.shape :", subwin.outputs["Output"].meta.shape
 
 
 #    in addition output slots have some other useful properties as
-#    .dtype and .axistags
+#    meta.dtype and meta.axistags
 
-print "reader.outputs[\"Image\"].shape :", reader.outputs["Image"].shape
-print "reader.outputs[\"Image\"].dtype :", reader.outputs["Image"].dtype
-print "reader.outputs[\"Image\"].axistags :", reader.outputs["Image"].axistags
+print "reader.outputs[\"Image\"].meta.shape :", reader.outputs["Image"].meta.shape
+print "reader.outputs[\"Image\"].meta.dtype :", reader.outputs["Image"].meta.dtype
+print "reader.outputs[\"Image\"].meta.axistags :", reader.outputs["Image"].meta.axistags

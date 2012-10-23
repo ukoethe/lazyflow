@@ -1,30 +1,36 @@
 import nose
-from lazyflow import graph
+from lazyflow.graph import Graph, Operator, InputSlot, OutputSlot, OperatorWrapper
 from lazyflow import stype
 from lazyflow import operators
 
-class OpB(graph.Operator):
+import logging
+logger = logging.getLogger()
+logger.addHandler( logging.NullHandler() )
 
-    Input = graph.InputSlot()
-    Output = graph.OutputSlot()
+class OpB(Operator):
+
+    Input = InputSlot()
+    Output = OutputSlot()
 
     def setupOutputs(self):
         self.Output.meta.shape = self.Input.meta.shape
         self.Output.meta.dtype = self.Input.meta.dtype
         print "OpInternal shape=%r, dtype=%r" % (self.Input.meta.shape, self.Input.meta.dtype)
 
-    def execute(self, slot, roi, result):
+    def execute(self, slot, subindex, roi, result):
         result[0] = self.Input[:].allocate().wait()[0]
         return result
 
+    def propagateDirty(self, inputSlot, subindex, roi):
+        self.Output.setDirty(roi)
 
-class OpA(graph.Operator):
+class OpA(Operator):
 
-    Input = graph.InputSlot()
-    Output = graph.OutputSlot()
+    Input = InputSlot()
+    Output = OutputSlot()
 
-    def __init__(self,parent):
-        graph.Operator.__init__(self, parent)
+    def __init__(self, parent=None, graph=None):
+        Operator.__init__(self, parent, graph)
         self.internalOp = OpB(self)
         self.internalOp.Input.connect(self.Input)
         self.inputBackup = self.Input
@@ -35,19 +41,19 @@ class OpA(graph.Operator):
         print "OpA shape=%r, dtype=%r" % (self.Input.meta.shape, self.Input.meta.dtype)
 
 
-    def execute(self, slot, roi, result):
+    def execute(self, slot, subindex, roi, result):
         result[0] = self.internalOp.Output[:].allocate().wait()[0]
         return result
 
-
-
+    def propagateDirty(self, inputSlot, subindex, roi):
+        self.Output.setDirty(roi)
 
 
 class TestInputInputConnection(object):
 
     def setUp(self):
-        self.g = graph.Graph()
-        self.op = OpA(self.g)
+        self.g = Graph()
+        self.op = OpA(graph=self.g)
 
     def tearDown(self):
         self.g.stopGraph()
@@ -66,59 +72,70 @@ class TestInputInputConnection(object):
 
 
     def test_wrapping(self):
-        opm = operators.Op5ToMulti(self.g)
+        opm = operators.Op5ToMulti(graph=self.g)
         opm.Input0.setValue(1)
 
-        self.op.Input.connect(opm.Outputs)
-        result = self.op.Output[0][:].allocate().wait()[0]
+        op = OperatorWrapper( OpA, graph=self.g )
+        op.Input.connect(opm.Outputs)
+        result = op.Output[0][:].allocate().wait()[0]
         assert result == 1
 
         opm.Input1.setValue(2)
-        result = self.op.Output[1][:].allocate().wait()[0]
+        result = op.Output[1][:].allocate().wait()[0]
         assert result == 2
 
-        self.op.Input.disconnect()
-        print "test_wrapping: self.op.Input =  ",self.op.Input
-        print "test_wrapping: self.op.inputs[\"Input\"] =  ",self.op.inputs["Input"]
-        self.op.Input.setValue(2)
-        result = self.op.Output[:].allocate().wait()[0]
-        assert result == 2
+        # Note: operator wrappers do not "restore" back to unwrapped operators after disconnect
+        # (That was their behavior at some point, but no longer.)
+        op.Input.disconnect()
+        op.Input.resize(0)
+        op.Input.setValue(2)
+        assert len(op.Input) == 0
+        assert len(op.Output) == 0
 
+class OpC(Operator):
 
-class OpC(graph.Operator):
+    Input = InputSlot(level = 1)
+    Output = OutputSlot( level = 1)
 
-    Input = graph.InputSlot(level = 1)
-    Output = graph.OutputSlot( level = 1)
-
-    def __init__(self,parent):
-        graph.Operator.__init__(self, parent)
-        self.internalOp = OpB(self)
+    def __init__(self,parent=None, graph=None):
+        Operator.__init__(self, parent, graph)
+        self.internalOp = OperatorWrapper( OpB, graph=self.graph )
         self.internalOp.Input.connect(self.Input)
         self.inputBackup = self.Input
 
     def setupOutputs(self):
-        self.Output.meta.shape = self.Input.meta.shape
-        self.Output.meta.dtype = self.Input.meta.dtype
+        numSlots = len(self.Input)
+        self.Output.resize(numSlots)
+        for i, slot in enumerate(self.Output):
+            slot.meta.shape = self.Input[i].meta.shape
+            slot.meta.dtype = self.Input[i].meta.dtype
 
-    def execute(self, slot, roi, result):
+    def execute(self, slot, subindex, roi, result):
         result[0] = self.internalOp.Output[:].allocate().wait()[0]
         return result
 
 class TestMultiInputInputConnection(object):
 
     def setUp(self):
-        self.g = graph.Graph()
-        self.op = OpC(self.g)
+        self.g = Graph()
+        self.op = OpC(graph=self.g)
 
     def tearDown(self):
         self.g.stopGraph()
 
     def test_wrapping(self):
-        opm = operators.Op5ToMulti(self.g)
+        opm = operators.Op5ToMulti(graph=self.g)
         opm.Input0.setValue(1)
 
         self.op.Input.connect(opm.Outputs)
 
         assert len(self.op.internalOp.Output) == 1
-        assert self.op.internalOp.Output[0].shape is not None
+        assert self.op.internalOp.Output[0].meta.shape is not None
         assert self.op.internalOp.Output[0].value == 1
+
+if __name__ == "__main__":
+    import sys
+    import nose
+    sys.argv.append("--nocapture")    # Don't steal stdout.  Show it on the console as usual.
+    sys.argv.append("--nologcapture") # Don't set the logging level to DEBUG.  Leave it alone.
+    nose.run(defaultTest=__file__)

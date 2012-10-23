@@ -53,39 +53,7 @@ if 1==2:
         invalidated by this, and must call the .setDirty(key) of the corresponding
         outputslots.
         """
-        def notifyDirty(self, inputSlot, key):
-            pass
-
-        """
-        This method corresponds to the notifyDirty method, but is used
-        for multidimensional inputslots, which contain subslots.
-
-        The slots argument is a list of slots in which the first
-        element specifies the mainslot (i.e. the slot which is specified
-        in the operator.). The next element specifies the sub slot, i.e. the
-        child of the main slot, and so forth.
-
-        The indexes argument is a list of the subslot indexes. As such it is
-        of lenght n-1 where n is the length of the slots arugment list.
-        It contains the indexes of all subslots realtive to their parent slot.
-
-        The key argument specifies the region of interest.
-        """
-        def notifySubSlotDirty(self, slots, indexes, key):
-            pass
-
-
-        """
-        This method is called opon connection of an inputslot.
-        The slot is specified in the inputSlot argument.
-
-        The operator should setup the output slots that depend on this
-        inputslot accordingly.
-
-        reimplementation of this method is optional, a full setup
-        may also be done only in the .notifyConnectAll method.
-        """
-        def notifyConnect(self, inputSlot):
+        def propagateDirty(self, slot, subindex, roi):
             pass
 
         """
@@ -95,7 +63,7 @@ if 1==2:
         The operator should setup the output all outputslots accordingly.
         this includes setting their shape and axistags properties.
         """
-        def notifyConnectAll(self):
+        def setupOutputs(self):
             pass
 
 
@@ -153,28 +121,8 @@ if 1==2:
         calculate the requested output area from its input slots,
         run the calculation and put the results into the provided result argument.
         """
-        def getOutSlot(self, slot, key, result):
+        def execute(self, slot, subindex, roi, result):
             pass
-
-
-        """
-        This method corresponds to the getOutSlot method, but is used
-        for multidimensional inputslots, which contain subslots.
-
-        The slots argument is a list of slots in which the first
-        element specifies the mainslot (i.e. the slot which is specified
-        in the operator.). The next element specifies the sub slot, i.e. the
-        child of the main slot, and so forth.
-
-        The indexes argument is a list of the subslot indexes. As such it is
-        of lenght n-1 where n is the length of the slots arugment list.
-        It contains the indexes of all subslots realtive to their parent slot.
-
-        The key argument specifies the region of interest.
-        """
-        def getSubOutSlot(self, slots, indexes, key, result):
-            return None
-
 
         """
         This method is called when an inputslot is disconnected.
@@ -231,19 +179,20 @@ class OpArrayShifter1(Operator):
 
     #this method is called when all InputSlot, in this example only one,
     #are connected with an OutputSlot or a value is set.
-    def notifyConnectAll(self):
+    def setupOutputs(self):
         #new name for the InputSlot("Input")
         inputSlot = self.inputs["Input"]
         #define the type, shape and axistags of the Output-Slot
-        self.outputs["Output"]._dtype = inputSlot.dtype
-        self.outputs["Output"]._shape = inputSlot.shape
-        self.outputs["Output"]._axistags = copy.copy(inputSlot.axistags)
+        self.outputs["Output"].meta.dtype = inputSlot.meta.dtype
+        self.outputs["Output"].meta.shape = inputSlot.meta.shape
+        self.outputs["Output"].meta.axistags = copy.copy(inputSlot.meta.axistags)
 
     #this method calculates the shifting
-    def getOutSlot(self, slot, key, result):
+    def execute(self, slot, subindex, roi, result):
+        key = roi.toSlice()
 
         #new name for the shape of the InputSlot
-        shape =  self.inputs["Input"].shape
+        shape =  self.inputs["Input"].meta.shape
 
         #get N-D coordinate out of slice
         rstart, rstop = sliceToRoi(key, shape)
@@ -284,7 +233,8 @@ class OpArrayShifter1(Operator):
         res = req.wait()
         return res
 
-    def notifyDirty(self,slot,key):
+    def propagateDirty(self, slot, subindex, roi):
+        key = roi.toSlice()
         self.outputs["Output"].setDirty(key)
 
 
@@ -293,21 +243,21 @@ from lazyflow import operators
 # create graph
 g = Graph()
 # construct image reader
-reader = operators.OpImageReader(g)
+reader = operators.OpImageReader(graph=g)
 reader.inputs["Filename"].setValue("ostrich.jpg")
 # create Shifter_Operator with Graph-Objekt as argument
-shifter = OpArrayShifter1(g)
+shifter = OpArrayShifter1(graph=g)
 
 # connect Shifter-Input with Image Reader Output
 # because the Operator has only one Input Slot in this example,
-# the "notifyConnectAll" method is executed
+# the "setupOutputs" method is executed
 shifter.inputs["Input"].connect(reader.outputs["Image"])
 
 # shifter.outputs["Output"][:]returns an "GetItemWriterObject" object.
 # its method "allocate" will be executed, this method call the "writeInto"
 # method which calls the "fireRequest" method of the, in this case,
 # "OutputSlot" object which calls another method in "OutputSlot and finally
-# the "getOutSlot" method of our operator.
+# the "execute" method of our operator.
 # The wait() function blocks other activities and waits till the results
 # of the requested Slot are calculated and stored in the result area.
 result=shifter.outputs["Output"][:].allocate().wait()

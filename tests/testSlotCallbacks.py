@@ -1,19 +1,19 @@
 import nose
-from lazyflow import graph
+from lazyflow.graph import Graph, Operator, InputSlot, OutputSlot
 from lazyflow import stype
 from lazyflow import operators
 import numpy
 
-class OpS(graph.Operator):
+class OpS(Operator):
     name = "OpA"
 
-    Output1 = graph.OutputSlot()
-    Output2 = graph.OutputSlot()
-    Output3 = graph.OutputSlot()
-    Output4 = graph.MultiOutputSlot(level = 1)
+    Output1 = OutputSlot()
+    Output2 = OutputSlot()
+    Output3 = OutputSlot()
+    Output4 = OutputSlot(level = 1)
 
-    def __init__(self, parent):
-        graph.Operator.__init__(self,parent)
+    def __init__(self, parent=None, graph=None):
+        Operator.__init__(self,parent,graph)
 
     def setupOutputs(self):
         self._configured = True
@@ -24,25 +24,25 @@ class OpS(graph.Operator):
         self.Output3.meta.shape = (3,)
         self.Output3.meta.dtype = numpy.uint32
 
-    def execute(self, slot, roi, result):
+    def execute(self, slot, subindex, roi, result):
         pass
 
-class OpA(graph.Operator):
+class OpA(Operator):
     name = "OpA"
 
-    Input1 = graph.InputSlot()                # required slot
-    Input2 = graph.InputSlot(optional = True) # optional slot
-    Input3 = graph.InputSlot(value = 3)       # required slot with default value, i.e. already connected
-    Input4 = graph.MultiInputSlot(level = 1)
+    Input1 = InputSlot()                # required slot
+    Input2 = InputSlot(optional = True) # optional slot
+    Input3 = InputSlot(value = 3)       # required slot with default value, i.e. already connected
+    Input4 = InputSlot(level = 1)
 
-    Output1 = graph.OutputSlot()
-    Output2 = graph.OutputSlot()
-    Output3 = graph.OutputSlot()
-    Output4 = graph.MultiOutputSlot(level =1)
+    Output1 = OutputSlot()
+    Output2 = OutputSlot()
+    Output3 = OutputSlot()
+    Output4 = OutputSlot(level =1)
 
 
-    def __init__(self, parent):
-        graph.Operator.__init__(self,parent)
+    def __init__(self, parent=None, graph=None):
+        Operator.__init__(self,parent=parent, graph=graph)
         self._configured = False
 
     def setupOutputs(self):
@@ -56,15 +56,16 @@ class OpA(graph.Operator):
         self.Output4.meta.shape = self.Input4.meta.shape
         self.Output4.meta.dtype = self.Input4.meta.dtype
 
-    def execute(self, slot, roi, result):
+    def execute(self, slot, subindex, roi, result):
         pass
 
-
+    def propagateDirty(self, inputSlot, subindex, roi):
+        pass
 
 class TestSlot_notifyConnect(object):
 
     def setUp(self):
-        self.g = graph.Graph()
+        self.g = Graph()
 
     def tearDown(self):
         self.g.stopGraph()
@@ -72,8 +73,8 @@ class TestSlot_notifyConnect(object):
     def test_connect(self):
         # test that the notifyConnect callback is called
         # when the slot is connected
-        ops = OpS(self.g)
-        opa = OpA(self.g)
+        ops = OpS(graph=self.g)
+        opa = OpA(graph=self.g)
         opa.Input2.connect(ops.Output2)
 
         upval = [False]
@@ -82,35 +83,35 @@ class TestSlot_notifyConnect(object):
             upval[0] = True
 
         # check the connect callback is called
-        opa.Input1.notifyConnect(callBack)
+        opa.Input1._notifyConnect(callBack)
         opa.Input1.connect(ops.Output1)
         assert upval[0] == True
 
 
         # check the connect callback is called for a slot with default value
         upval[0] = False
-        opa.Input3.notifyConnect(callBack)
+        opa.Input3._notifyConnect(callBack)
         opa.Input3.connect(ops.Output3)
         assert upval[0] == True
 
 
         # check the connect callback is called for a multi inputslot
         upval[0] = False
-        opa.Input4.notifyConnect(callBack)
+        opa.Input4._notifyConnect(callBack)
         opa.Input4.connect(ops.Output4)
         assert upval[0] == True
 
 
     def test_no_connect(self):
-        ops = OpS(self.g)
-        opa = OpA(self.g)
+        ops = OpS(graph=self.g)
+        opa = OpA(graph=self.g)
 
         upval = [False]
 
         def callBack(slot):
             upval[0] = True
 
-        opa.Input1.notifyConnect(callBack)
+        opa.Input1._notifyConnect(callBack)
 
         # check the connect callback is not called when reconnecting to the same slot
         opa.Input1.connect(ops.Output1)
@@ -119,6 +120,7 @@ class TestSlot_notifyConnect(object):
         assert upval[0] == False
 
         # check the connect callback is not called when setting the same value again
+        opa.Input1.disconnect()
         opa.Input1.setValue(10)
         upval[0] = False
         opa.Input1.setValue(10)
@@ -126,16 +128,16 @@ class TestSlot_notifyConnect(object):
 
     def test_unregister_connect(self):
         # check that unregistering a connect callback works
-        ops = OpS(self.g)
-        opa = OpA(self.g)
+        ops = OpS(graph=self.g)
+        opa = OpA(graph=self.g)
 
         upval = [False]
 
         def callBack(slot):
             upval[0] = True
 
-        opa.Input1.notifyConnect(callBack)
-        opa.Input1.unregisterConnect(callBack)
+        opa.Input1._notifyConnect(callBack)
+        opa.Input1._unregisterConnect(callBack)
 
         opa.Input1.connect(ops.Output1)
         assert upval[0] == False
@@ -144,7 +146,7 @@ class TestSlot_notifyConnect(object):
 class TestSlot_notifyDisconnect(object):
 
     def setUp(self):
-        self.g = graph.Graph()
+        self.g = Graph()
 
     def tearDown(self):
         self.g.stopGraph()
@@ -152,8 +154,8 @@ class TestSlot_notifyDisconnect(object):
     def test_disconnect(self):
         # test that the notifyConnect callback is called
         # when the slot is connected
-        ops = OpS(self.g)
-        opa = OpA(self.g)
+        ops = OpS(graph=self.g)
+        opa = OpA(graph=self.g)
 
         upval = [False]
 
@@ -175,12 +177,13 @@ class TestSlot_notifyDisconnect(object):
         # check the disconnect callback is called upon setValue when being already connected
         opa.Input1.connect(ops.Output1)
         upval[0] = False
+        opa.Input1.disconnect()
         opa.Input1.setValue(19)
         assert upval[0] == True
 
     def test_no_disconnect(self):
-        ops = OpS(self.g)
-        opa = OpA(self.g)
+        ops = OpS(graph=self.g)
+        opa = OpA(graph=self.g)
 
         upval = [False]
 
@@ -196,6 +199,7 @@ class TestSlot_notifyDisconnect(object):
         assert upval[0] == False
 
         # check the disconnect callback is not called when setting the same value again
+        opa.Input1.disconnect()
         opa.Input1.setValue(10)
         upval[0] = False
         opa.Input1.setValue(10)
@@ -203,8 +207,8 @@ class TestSlot_notifyDisconnect(object):
 
     def test_unregister_disconnect(self):
         # check that unregistering a disconnect callback works
-        ops = OpS(self.g)
-        opa = OpA(self.g)
+        ops = OpS(graph=self.g)
+        opa = OpA(graph=self.g)
 
         upval = [False]
 
@@ -227,7 +231,7 @@ class TestSlot_notifyDisconnect(object):
 class TestSlot_notifyMetaChanged(object):
 
     def setUp(self):
-        self.g = graph.Graph()
+        self.g = Graph()
 
     def tearDown(self):
         self.g.stopGraph()
@@ -235,8 +239,8 @@ class TestSlot_notifyMetaChanged(object):
     def test_inputslot_changed(self):
         # test that the changed callback is called
         # when the slot meta information changes
-        ops = OpS(self.g)
-        opa = OpA(self.g)
+        ops = OpS(graph=self.g)
+        opa = OpA(graph=self.g)
 
         upval = [False]
 
@@ -259,6 +263,11 @@ class TestSlot_notifyMetaChanged(object):
         opa.Input3.connect(ops.Output1)
         assert upval[0] == True
 
-
-        # test MultiInputSlot
         upval[0] = False
+
+if __name__ == "__main__":
+    import sys
+    import nose
+    sys.argv.append("--nocapture")    # Don't steal stdout.  Show it on the console as usual.
+    sys.argv.append("--nologcapture") # Don't set the logging level to DEBUG.  Leave it alone.
+    nose.run(defaultTest=__file__)

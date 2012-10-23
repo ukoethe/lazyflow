@@ -93,15 +93,17 @@ class TestOpValueCache(object):
         def setupOutputs(self):
             self.Output.meta.assignFrom(self.Input.meta)
         
-        def execute(self, slot, roi, result):
+        def execute(self, slot, subindex, roi, result):
             self.executionCount += 1
             time.sleep(2)
             result[...] = self.Input.value
         
+        def propagateDirty(self, inputSlot, subindex, roi):
+            self.Output.setDirty(roi)
     
     def test_basic(self):
         graph = lazyflow.graph.Graph()
-        op = OpValueCache()
+        op = OpValueCache(graph=graph)
         assert not op._dirty
         op.Input.setValue('Hello')
         assert op._dirty
@@ -146,7 +148,7 @@ class TestOpValueCache(object):
         assert opCache._request is None
         assert opCache.Output.value == 100
 
-if __name__ == "__main__":
+#if __name__ == "__main__":
 #    import logging
 #    traceLogger = logging.getLogger("TRACE.lazyflow.operators.obsolete.valueProviders.OpValueCache")
 #    traceLogger.setLevel(logging.DEBUG)
@@ -154,5 +156,12 @@ if __name__ == "__main__":
 #    handler.setLevel(logging.DEBUG)
 #    traceLogger.addHandler(handler)
 
+#    import nose
+#    nose.run(defaultTest=__file__, env={'NOSE_NOCAPTURE' : 1})
+
+if __name__ == "__main__":
+    import sys
     import nose
-    nose.run(defaultTest=__file__, env={'NOSE_NOCAPTURE' : 1})
+    #sys.argv.append("--nocapture")    # Don't steal stdout.  Show it on the console as usual.
+    sys.argv.append("--nologcapture") # Don't set the logging level to DEBUG.  Leave it alone.
+    nose.run(defaultTest=__file__)

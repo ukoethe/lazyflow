@@ -1,3 +1,7 @@
+Lazyflow
+========
+[![Build Status](https://secure.travis-ci.org/Ilastik/lazyflow.png)](http://travis-ci.org/Ilastik/lazyflow)
+
 Lazyflow is a python library for multithreaded computations.
 Data dependencies are expressed as a data flow graph which is evaluated
 in a lazy manner.
@@ -57,7 +61,7 @@ class SumOperator(Operator):
 
   output = OutputSlot(stype=ArrayLike)
 
-  def execute(self, slot, roi, result):
+  def execute(self, slot, subindex, roi, result):
     # the following two lines query the inputs of the
     # operator for the specififed region of interest
 
@@ -225,7 +229,7 @@ class SumOperator(Operator):
     self.output.meta.dtype = self.inputA.meta.dtype
 
 
-  def execute(self, slot, roi, result):
+  def execute(self, slot, subindex, roi, result):
     pass
 ```
 
@@ -250,7 +254,7 @@ class SumOperator(Operator):
 
   output = OutputSlot(stype=ArrayLike)
 
-  def propagateDirty(self, slot, roi):
+  def propagateDirty(self, slot, subindex, roi):
     # the method receives as argument the slot
     # which was changed, and the region of interest (roi)
     # that was changed in the slot
@@ -264,7 +268,7 @@ class SumOperator(Operator):
   def setupOutputs(self):
     pass
 
-  def execute(self, slot, roi, result):
+  def execute(self, slot, subindex, roi, result):
     pass
 ```
 
@@ -294,10 +298,10 @@ class SumOperator(Operator):
   def setupOutputs(self):
     pass
 
-  def execute(self, slot, roi, result):
+  def execute(self, slot, subindex, roi, result):
     pass
   
-  def propagateDirty(self, slot, roi):
+  def propagateDirty(self, slot, subindex, roi):
     pass
 
 ```

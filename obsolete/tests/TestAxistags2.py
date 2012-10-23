@@ -77,13 +77,13 @@ import pylab
 #
 #
 #    if cache:
-#        tempOp = operators.OpArrayCache(g)
+#        tempOp = operators.OpArrayCache(graph=g)
 #        tempOp.inputs["Input"].connect(op.outputs["Output"])
 #
 #        op = tempOp
 #
 #    #fragmented image
-#    img1 = numpy.zeros(op.outputs["Output"]._shape , numpy.float32)
+#    img1 = numpy.zeros(op.outputs["Output"].meta.shape , numpy.float32)
 #
 #    start = []
 #    stop = []
@@ -92,7 +92,7 @@ import pylab
 #        stop.append(numpy.array(img1.shape)[i])
 #
 #    requests = []
-#    imgP = numpy.zeros(op.outputs["Output"]._shape , numpy.float32)
+#    imgP = numpy.zeros(op.outputs["Output"].meta.shape , numpy.float32)
 #
 #    arraySplitter(op,img1,start[:],stop[:], requests, notify, sync = sync)
 #
@@ -125,104 +125,104 @@ def add_Op(graph, OpNum=None):
     import random
     random.seed()
 
-    a_Op[0]= OpGaussianSmoothing(graph)#
+    a_Op[0]= OpGaussianSmoothing(graph=graph)#
     a_Op[0].inputs["sigma"].setValue(0.2)
 
-    a_Op[1]= OpGaussianSmoothing(graph)#
+    a_Op[1]= OpGaussianSmoothing(graph=graph)#
     a_Op[1].inputs["sigma"].setValue(0.3)
 
-    a_Op[2] = OpDifferenceOfGaussians(graph)#
+    a_Op[2] = OpDifferenceOfGaussians(graph=graph)#
     a_Op[2].inputs["sigma0"].setValue(1)
     a_Op[2].inputs["sigma1"].setValue(0.2)
 
-    a_Op[3] = OpDifferenceOfGaussians(graph)#
+    a_Op[3] = OpDifferenceOfGaussians(graph=graph)#
     a_Op[3].inputs["sigma0"].setValue(0.4)
     a_Op[3].inputs["sigma1"].setValue(1.9)
 
-    a_Op[4] = OpDifferenceOfGaussians(graph)#
+    a_Op[4] = OpDifferenceOfGaussians(graph=graph)#
     a_Op[4].inputs["sigma0"].setValue(1.1)
     a_Op[4].inputs["sigma1"].setValue(0.6)
 
-    a_Op[5] = OpLaplacianOfGaussian(graph)#
+    a_Op[5] = OpLaplacianOfGaussian(graph=graph)#
     a_Op[5].inputs["scale"].setValue(1.5)
 
-    a_Op[5] = OpLaplacianOfGaussian(graph)#
+    a_Op[5] = OpLaplacianOfGaussian(graph=graph)#
     a_Op[5].inputs["scale"].setValue(0.1)
 
-    a_Op[6] = OpOpening(graph)#
+    a_Op[6] = OpOpening(graph=graph)#
     a_Op[6].inputs["sigma"].setValue(1.1)
 
-    a_Op[7] = OpOpening(graph)#
+    a_Op[7] = OpOpening(graph=graph)#
     a_Op[7].inputs["sigma"].setValue(0.8)
 
-    a_Op[8] = OpErosion(graph)#
+    a_Op[8] = OpErosion(graph=graph)#
     a_Op[8].inputs["sigma"].setValue(0.74)
 
-    a_Op[9] = OpErosion(graph)#
+    a_Op[9] = OpErosion(graph=graph)#
     a_Op[9].inputs["sigma"].setValue(1.25)
 
-    a_Op[10] = OpDilation(graph)#
+    a_Op[10] = OpDilation(graph=graph)#
     a_Op[10].inputs["sigma"].setValue(0.15)
 
-    a_Op[11] = OpDilation(graph)#
+    a_Op[11] = OpDilation(graph=graph)#
     a_Op[11].inputs["sigma"].setValue(0.1)
 
-    a_Op[10] = OpClosing(graph)#
+    a_Op[10] = OpClosing(graph=graph)#
     a_Op[10].inputs["sigma"].setValue(1.12)
 
-    a_Op[11] = OpClosing(graph)#
+    a_Op[11] = OpClosing(graph=graph)#
     a_Op[11].inputs["sigma"].setValue(0.36)
 
-    a_Op[12] = OpGaussianGradientMagnitude(graph)#
+    a_Op[12] = OpGaussianGradientMagnitude(graph=graph)#
     a_Op[12].inputs["sigma"].setValue(1.12)
 
-    a_Op[13] = OpGaussianGradientMagnitude(graph)#
+    a_Op[13] = OpGaussianGradientMagnitude(graph=graph)#
     a_Op[13].inputs["sigma"].setValue(0.78)
 
-#    a_Op[14] = OpHessianOfGaussianEigenvaluesFirst(graph)
+#    a_Op[14] = OpHessianOfGaussianEigenvaluesFirst(graph=graph)
 #    a_Op[14].inputs["scale"].setValue(6.7)
 
-#    a_Op[15] = OpHessianOfGaussianEigenvaluesFirst(graph)
+#    a_Op[15] = OpHessianOfGaussianEigenvaluesFirst(graph=graph)
 #    a_Op[15].inputs["scale"].setValue(0.24)
 
-    a_Op[16] = OpArrayCache(graph)##
+    a_Op[16] = OpArrayCache(graph=graph)##
 
-    a_Op[17] = OpArrayCache(graph)##
+    a_Op[17] = OpArrayCache(graph=graph)##
 
-    a_Op[18] = OpArrayPiper(graph)##
+    a_Op[18] = OpArrayPiper(graph=graph)##
 
-    a_Op[19] = OpArrayPiper(graph)##
+    a_Op[19] = OpArrayPiper(graph=graph)##
 
-    a_Op[20] = operators.OpBlockedArrayCache(graph)
+    a_Op[20] = operators.OpBlockedArrayCache(graph=graph)
     a_Op[20].inputs["innerBlockShape"].setValue(7)
     a_Op[20].inputs["outerBlockShape"].setValue((5,18,20,3,2))
     a_Op[20].inputs["fixAtCurrent"].setValue(False)
 
-    a_Op[21] = operators.OpBlockedArrayCache(graph)
+    a_Op[21] = operators.OpBlockedArrayCache(graph=graph)
     a_Op[21].inputs["innerBlockShape"].setValue(64)
     a_Op[21].inputs["outerBlockShape"].setValue((10,5,10,5,5))
     a_Op[21].inputs["fixAtCurrent"].setValue(False)
 
-    a_Op[22] = operators.OpPixelOperator(graph)##
+    a_Op[22] = operators.OpPixelOperator(graph=graph)##
     def func1(a):
         return a +1
     a_Op[22].inputs["Function"].setValue(func1)
 
-    a_Op[23] = operators.OpPixelOperator(graph)##
+    a_Op[23] = operators.OpPixelOperator(graph=graph)##
     def func2(a):
         return a * 7
     a_Op[23].inputs["Function"].setValue(func2)
 #
-#    a_Op[24] = OpDifferenceOfGaussians(graph)
+#    a_Op[24] = OpDifferenceOfGaussians(graph=graph)
 #    a_Op[24].inputs["sigma0"].setValue(6.29)
 #
-#    a_Op[25] = OpDifferenceOfGaussians(graph)
+#    a_Op[25] = OpDifferenceOfGaussians(graph=graph)
 #    a_Op[25].inputs["sigma0"].setValue(0.48)
 #
-#    a_Op[26] = OpCoherenceOrientation(graph)
+#    a_Op[26] = OpCoherenceOrientation(graph=graph)
 #    a_Op[26].inputs["sigma0"].setValue(0.77)
 #
-#    a_Op[27] = OpCoherenceOrientation(graph)
+#    a_Op[27] = OpCoherenceOrientation(graph=graph)
 #    a_Op[27].inputs["sigma0"].setValue(3.6)
 
     if OpNum in a_Op:
@@ -242,9 +242,9 @@ def connect_Multi20_Stacker(graph, source, Op):
     source - Source-Operator
     Op - Dictionnary of preset Operators
     """
-    s_dytpe = source.outputs["Output"]._dtype
-    s_shape = source.outputs["Output"]._shape
-    s_axistags = source.outputs["Output"]._axistags
+    s_dytpe = source.outputs["Output"].meta.dtype
+    s_shape = source.outputs["Output"].meta.shape
+    s_axistags = source.outputs["Output"].meta.axistags
 
     numList = []
     for i in Op:
@@ -259,14 +259,14 @@ def connect_Multi20_Stacker(graph, source, Op):
     List_Mul_20 = {}
     List_Stacker_20 = {}
 
-    Multi_20 = Op20ToMulti(graph)
-    Stacker_20 = OpMultiArrayStacker(graph)
+    Multi_20 = Op20ToMulti(graph=graph)
+    Stacker_20 = OpMultiArrayStacker(graph=graph)
 
     for j in range(max_num/20+1):
-        List_Mul_20[j] = Op20ToMulti(graph)
+        List_Mul_20[j] = Op20ToMulti(graph=graph)
         #for z in range(20):
         #    List_Mul_20[j].inputs["Input%02d" %(z)].disconnect()
-        List_Stacker_20[j] = OpMultiArrayStacker(graph)
+        List_Stacker_20[j] = OpMultiArrayStacker(graph=graph)
 
         sub_Max = min(max_num-j*20,20)
         for i in range(sub_Max):
@@ -282,16 +282,16 @@ def connect_Multi20_Stacker(graph, source, Op):
 
         print "_______________________"
         print "Stacker_Number:", j
-        print List_Stacker_20[j].outputs["Output"]._shape
+        print List_Stacker_20[j].outputs["Output"].meta.shape
         print "_______________________"
         temp_shape = list(s_shape)
         temp_shape[s_axistags.index('c')] = s_shape[s_axistags.index('c')]*sub_Max
-        assert (List_Stacker_20[j].outputs["Output"]._shape == tuple(temp_shape))
-        assert (List_Stacker_20[j].outputs["Output"]._dtype == s_dytpe)
+        assert (List_Stacker_20[j].outputs["Output"].meta.shape == tuple(temp_shape))
+        assert (List_Stacker_20[j].outputs["Output"].meta.dtype == s_dytpe)
 
         for i in range (5):
-            assert (List_Stacker_20[j].outputs["Output"]._axistags[i].description == s_axistags[i].description)
-            assert (List_Stacker_20[j].outputs["Output"]._axistags[i].isType(s_axistags[i].typeFlags))
+            assert (List_Stacker_20[j].outputs["Output"].meta.axistags[i].description == s_axistags[i].description)
+            assert (List_Stacker_20[j].outputs["Output"].meta.axistags[i].isType(s_axistags[i].typeFlags))
 
     Stacker_20.inputs["Images"].connect(Multi_20.outputs["Outputs"])
     Stacker_20.inputs["AxisFlag"].setValue('c')
@@ -300,17 +300,17 @@ def connect_Multi20_Stacker(graph, source, Op):
     print "_______________________"
     print "_______________________"
     print "Big Stacker"
-    print Stacker_20.outputs["Output"]._shape
+    print Stacker_20.outputs["Output"].meta.shape
     print "_______________________"
     print "_______________________"
     temp_shape = list(s_shape)
     temp_shape[s_axistags.index('c')] = s_shape[s_axistags.index('c')]*max_num
-    assert (Stacker_20.outputs["Output"]._shape == tuple(temp_shape)), "OutputShape: %s  expected Shape %s" %(Stacker_20.outputs["Output"]._shape, tuple(temp_shape) )
-    assert (Stacker_20.outputs["Output"]._dtype == s_dytpe)
+    assert (Stacker_20.outputs["Output"].meta.shape == tuple(temp_shape)), "OutputShape: %s  expected Shape %s" %(Stacker_20.outputs["Output"].meta.shape, tuple(temp_shape) )
+    assert (Stacker_20.outputs["Output"].meta.dtype == s_dytpe)
 
     for i in range (5):
-        assert (Stacker_20.outputs["Output"]._axistags[i].description == s_axistags[i].description)
-        assert (Stacker_20.outputs["Output"]._axistags[i].isType(s_axistags[i].typeFlags))
+        assert (Stacker_20.outputs["Output"].meta.axistags[i].description == s_axistags[i].description)
+        assert (Stacker_20.outputs["Output"].meta.axistags[i].isType(s_axistags[i].typeFlags))
 
     return Stacker_20
 
@@ -389,9 +389,9 @@ def connect_random(graph, source, Op):
     source - Source-Operator
     Op - Dictionnary of preset Operators
     """
-    s_dytpe = source.outputs["Output"]._dtype
-    s_shape = source.outputs["Output"]._shape
-    s_axistags = source.outputs["Output"]._axistags
+    s_dytpe = source.outputs["Output"].meta.dtype
+    s_shape = source.outputs["Output"].meta.shape
+    s_axistags = source.outputs["Output"].meta.axistags
 
     numList = []
     for i in Op:
@@ -414,13 +414,13 @@ def connect_random(graph, source, Op):
 
 
         print "Op Name:", Op[num].name
-        print Op[num].outputs["Output"]._shape
-        assert (Op[num].outputs["Output"]._shape == s_shape), "Output shape %s  expected shape %s "%( Op[num].outputs["Output"]._shape,s_shape)
-        assert (Op[num].outputs["Output"]._dtype == s_dytpe)
+        print Op[num].outputs["Output"].meta.shape
+        assert (Op[num].outputs["Output"].meta.shape == s_shape), "Output shape %s  expected shape %s "%( Op[num].outputs["Output"].meta.shape,s_shape)
+        assert (Op[num].outputs["Output"].meta.dtype == s_dytpe)
 
         for i in range (5):
-            assert (Op[num].outputs["Output"]._axistags[i].description == s_axistags[i].description)
-            assert (Op[num].outputs["Output"]._axistags[i].isType(s_axistags[i].typeFlags))
+            assert (Op[num].outputs["Output"].meta.axistags[i].description == s_axistags[i].description)
+            assert (Op[num].outputs["Output"].meta.axistags[i].isType(s_axistags[i].typeFlags))
 
         pre_num = num
         numList.remove(num)
@@ -448,12 +448,12 @@ if __name__=="__main__":
     g = Graph()
 
 
-    source = OpArrayPiper(g)
+    source = OpArrayPiper(graph=g)
     source.inputs["Input"].setValue(img)
 
-    s_dytpe = source.outputs["Output"]._dtype
-    s_shape = source.outputs["Output"]._shape
-    s_axistags = source.outputs["Output"]._axistags
+    s_dytpe = source.outputs["Output"].meta.dtype
+    s_shape = source.outputs["Output"].meta.shape
+    s_axistags = source.outputs["Output"].meta.axistags
 
     assert (s_shape == img.shape)
 
@@ -476,7 +476,7 @@ if __name__=="__main__":
     Op = {}
 
     for i in range(0,42):
-        Op[i] = add_Op(g)
+        Op[i] = add_Op(graph=g)
 
     max_num = len(Op)
     print "MAX:" , max_num
@@ -486,7 +486,7 @@ if __name__=="__main__":
     Op = {}
 
     for i in range(0,12):
-        Op[i] = add_Op(g)
+        Op[i] = add_Op(graph=g)
 
 
     max_num = len(Op)
@@ -495,25 +495,25 @@ if __name__=="__main__":
     rand_op = connect_random(g,stacker, Op)
 
 
-    e = OpArrayPiper(g)
+    e = OpArrayPiper(graph=g)
     e.inputs["Input"].connect(rand_op.outputs["Output"])
 
     print "_______________________"
     print "_________end___________"
     print "_______________________"
-    print "_dtype", e.outputs["Output"]._dtype
-    print "_shape", e.outputs["Output"]._shape
-    print e.outputs["Output"]._axistags
+    print "_dtype", e.outputs["Output"].meta.dtype
+    print "_shape", e.outputs["Output"].meta.shape
+    print e.outputs["Output"].meta.axistags
     res = e.outputs["Output"][:].allocate().wait()
     print "Result-Shape", res.shape
 
 
-    #assert (e.outputs["Output"]._shape == s_shape), "Output shape %s  expected shape %s "%( e.outputs["Output"]._shape,s_shape)
-    assert (e.outputs["Output"]._dtype == s_dytpe)
+    #assert (e.outputs["Output"].meta.shape == s_shape), "Output shape %s  expected shape %s "%( e.outputs["Output"].meta.shape,s_shape)
+    assert (e.outputs["Output"].meta.dtype == s_dytpe)
 
     for i in range (5):
-        assert (e.outputs["Output"]._axistags[i].description == s_axistags[i].description)
-        assert (e.outputs["Output"]._axistags[i].isType(s_axistags[i].typeFlags))
+        assert (e.outputs["Output"].meta.axistags[i].description == s_axistags[i].description)
+        assert (e.outputs["Output"].meta.axistags[i].isType(s_axistags[i].typeFlags))
 
 
 
@@ -523,12 +523,12 @@ if __name__=="__main__":
 
 
 
-    #OpGaussianGradientMagnitude(g)
-    #OpHessianOfGaussianEigenvaluesFirst(g)
+    #OpGaussianGradientMagnitude(graph=g)
+    #OpHessianOfGaussianEigenvaluesFirst(graph=g)
 
 
-    #OpDifferenceOfGaussians(g)
-    #OpCoherenceOrientation(g)
+    #OpDifferenceOfGaussians(graph=g)
+    #OpCoherenceOrientation(graph=g)
     #None
     #None
     #None

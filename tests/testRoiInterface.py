@@ -13,15 +13,18 @@ class OpRoiTest(Operator):
 
     def setupOutputs(self):
 
-        self.outputs["output"]._dtype = self.inputs["input"]._dtype
-        self.outputs["output"]._shape = self.inputs["input"]._shape
-        self.outputs["output"]._axistags = self.inputs["input"]._axistags
+        self.outputs["output"].meta.dtype = self.inputs["input"].meta.dtype
+        self.outputs["output"].meta.shape = self.inputs["input"].meta.shape
+        self.outputs["output"].meta.axistags = self.inputs["input"].meta.axistags
 
-    def execute(self,slot,roi,result):
+    def execute(self, slot, subindex, roi, result):
 
         tmpRes = self.inputs["input"](start=roi.start,stop=roi.stop).wait()
         result[:] = tmpRes
         return result
+
+    def propagateDirty(self, inputSlot, subindex, roi):
+        self.output.setDirty(roi)
 
 class TestRoiInterdace(TestCase):
 
@@ -29,9 +32,9 @@ class TestRoiInterdace(TestCase):
         self.testVol = vigra.VigraArray((200,200,200))
         self.testVol[:] = numpy.random.rand(200,200,200)
         self.graph = Graph()
-        self.op = OpArrayPiper(self.graph)
+        self.op = OpArrayPiper(graph=self.graph)
         self.op.inputs["Input"].setValue(self.testVol)
-        self.roiOp = OpRoiTest(self.graph)
+        self.roiOp = OpRoiTest(graph=self.graph)
         self.roiOp.inputs["input"].setValue(self.testVol)
 
     def test_roi(self):

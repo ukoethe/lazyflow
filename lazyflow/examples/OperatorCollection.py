@@ -3,6 +3,7 @@ import threading
 from lazyflow.graph import *
 import copy
 
+from lazyflow.roi import roiToSlice
 from lazyflow.operators.operators import OpArrayPiper
 from lazyflow.operators.vigraOperators import *
 from lazyflow.operators.valueProviders import *
@@ -24,19 +25,20 @@ class OpArrayShifter1(Operator):
 
     #this method is called when all InputSlot, in this example only one,
     #are connected with an OutputSlot or a value is set.
-    def notifyConnectAll(self):
+    def setupOutputs(self):
         #new name for the InputSlot("Input")
         inputSlot = self.inputs["Input"]
         #define the type, shape and axistags of the Output-Slot
-        self.outputs["Output"]._dtype = inputSlot.dtype
-        self.outputs["Output"]._shape = inputSlot.shape
-        self.outputs["Output"]._axistags = copy.copy(inputSlot.axistags)
+        self.outputs["Output"].meta.dtype = inputSlot.meta.dtype
+        self.outputs["Output"].meta.shape = inputSlot.meta.shape
+        self.outputs["Output"].meta.axistags = copy.copy(inputSlot.meta.axistags)
 
     #this method calculates the shifting
-    def getOutSlot(self, slot, key, result):
+    def execute(self, slot, subindex, roi, result):
+        key = roiToSlice(roi.start,roi.stop)
 
         #new name for the shape of the InputSlot
-        shape =  self.inputs["Input"].shape
+        shape =  self.inputs["Input"].meta.shape
 
         #get N-D coordinate out of slice
         rstart, rstop = sliceToRoi(key, shape)
@@ -77,16 +79,17 @@ class OpArrayShifter1(Operator):
         res = req()
         return res
 
-    def notifyDirty(self,slot,key):
+    def propagateDirty(self, slot, subindex, roi):
+        key = roi.toSlice()
         self.outputs["Output"].setDirty(key)
 
     @property
     def shape(self):
-        return self.outputs["Output"]._shape
+        return self.outputs["Output"].meta.shape
 
     @property
     def dtype(self):
-        return self.outputs["Output"]._dtype
+        return self.outputs["Output"].meta.dtype
 
 
 
@@ -101,13 +104,13 @@ class OpArrayShifter2(Operator):
     inputSlots = [InputSlot("Input")]
     outputSlots = [OutputSlot("Output")]
 
-    def notifyConnectAll(self):
+    def setupOutputs(self):
         #new name for the InputSlot("Input")
         inputSlot = self.inputs["Input"]
         #define the type, shape and axistags of the Output-Slot
-        self.outputs["Output"]._dtype = inputSlot.dtype
-        self.outputs["Output"]._shape = inputSlot.shape
-        self.outputs["Output"]._axistags = copy.copy(inputSlot.axistags)
+        self.outputs["Output"].meta.dtype = inputSlot.meta.dtype
+        self.outputs["Output"].meta.shape = inputSlot.meta.shape
+        self.outputs["Output"].meta.axistags = copy.copy(inputSlot.meta.axistags)
 
         #calculating diffrence between input dimension and shift dimension
         diffShift = numpy.array(self.shift).size - numpy.array(self.shape).size
@@ -119,10 +122,11 @@ class OpArrayShifter2(Operator):
             self.shift = self.shift[0:numpy.array(self.shape).size]
 
     #this method calculates the shifting
-    def getOutSlot(self, slot, key, result):
+    def execute(self, slot, subindex, roi, result):
+        key = roiToSlice(roi.start,roi.stop)
 
         #make shape of the input known
-        shape = self.inputs["Input"].shape
+        shape = self.inputs["Input"].meta.shape
         #get N-D coordinate out of slice
         rstart, rstop = sliceToRoi(key, shape)
 
@@ -161,16 +165,17 @@ class OpArrayShifter2(Operator):
         res = req()
         return res
 
-    def notifyDirty(selfut,slot,key):
+    def propagateDirty(self, slot, subindex, roi):
+        key = roi.toSlice()
         self.outputs["Output"].setDirty(key)
 
     @property
     def shape(self):
-        return self.outputs["Output"]._shape
+        return self.outputs["Output"].meta.shape
 
     @property
     def dtype(self):
-        return self.outputs["Output"]._dtype
+        return self.outputs["Output"].meta.dtype
 
 
 class OpArrayShifter3(Operator):
@@ -183,28 +188,29 @@ class OpArrayShifter3(Operator):
     inputSlots = [InputSlot("Input"), InputSlot("Shift")]
     outputSlots = [OutputSlot("Output")]
 
-    def notifyConnectAll(self):
+    def setupOutputs(self):
         #new name for the InputSlot("Input")
         inputSlot = self.inputs["Input"]
         #the value of inputs["Shift"].value, (the value of InputSlot("Shift))
         #which can be set freely, is saved in the property self.shift
         self.shift = self.inputs["Shift"].value
          #define the type, shape and axistags of the Output-Slot
-        self.outputs["Output"]._shape = inputSlot.shape
-        self.outputs["Output"]._dtype = inputSlot.dtype
-        self.outputs["Output"]._axistags = inputSlot.axistags
+        self.outputs["Output"].meta.shape = inputSlot.meta.shape
+        self.outputs["Output"].meta.dtype = inputSlot.meta.dtype
+        self.outputs["Output"].meta.axistags = inputSlot.meta.axistags
 
         #check if inputSlot("Shift") provides the appropriate type and dimension
         assert isinstance(self.shift, tuple), "OpArrayShifter: input'Shift' must have type tuple !"
-        assert len(self.shift) == len(inputSlot.shape), "OpArrayShifter: number of dimensions of 'Shift' and 'Input' differs ! Shift:%d, Input:%d" %(len(self.shift), len(inputSlot.shape))
+        assert len(self.shift) == len(inputSlot.meta.shape), "OpArrayShifter: number of dimensions of 'Shift' and 'Input' differs ! Shift:%d, Input:%d" %(len(self.shift), len(inputSlot.shape))
 
 
 
     #this method calculates the shifting
-    def getOutSlot(self, slot, key, result):
+    def execute(self, slot, subindex, roi, result):
+        key = roiToSlice(roi.start,roi.stop)
 
         #make shape of the input known
-        shape = self.inputs["Input"].shape
+        shape = self.inputs["Input"].meta.shape
         #get N-D coordinate out of slice
         rstart, rstop = sliceToRoi(key, shape)
 
@@ -236,16 +242,17 @@ class OpArrayShifter3(Operator):
         res = req()
         return res
 
-    def notifyDirty(selfut,slot,key):
+    def propagateDirty(self, slot, subindex, roi):
+        key = roi.toSlice()
         self.outputs["Output"].setDirty(key)
 
     @property
     def shape(self):
-        return self.outputs["Output"]._shape
+        return self.outputs["Output"].meta.shape
 
     @property
     def dtype(self):
-        return self.outputs["Output"]._dtype
+        return self.outputs["Output"].meta.dtype
 
 
 class OpImageResizer(Operator):
@@ -260,21 +267,22 @@ class OpImageResizer(Operator):
 
     #this method is called when all InputSlots,
     #are set or connected with an OutputSlot or a value is set.
-    def notifyConnectAll(self):
+    def setupOutputs(self):
 
         inputSlot = self.inputs["Input"]
         self.scaleFactor = self.inputs["ScaleFactor"].value
-        shape =  self.inputs["Input"].shape
+        shape =  self.inputs["Input"].meta.shape
 
         #define the type, shape and axistags of the Output-Slot
-        self.outputs["Output"]._dtype = inputSlot.dtype
-        self.outputs["Output"]._shape = tuple(numpy.hstack(((numpy.array(shape))[:-1] * self.scaleFactor, (numpy.array(shape))[-1])))
-        self.outputs["Output"]._axistags = copy.copy(inputSlot.axistags)
+        self.outputs["Output"].meta.dtype = inputSlot.meta.dtype
+        self.outputs["Output"].meta.shape = tuple(numpy.hstack(((numpy.array(shape))[:-1] * self.scaleFactor, (numpy.array(shape))[-1])))
+        self.outputs["Output"].meta.axistags = copy.copy(inputSlot.meta.axistags)
 
         assert self.scaleFactor > 0, "OpImageResizer: input'ScaleFactor' must be positive number !"
 
     #this method does the scaling
-    def getOutSlot(self, slot, key, result):
+    def execute(self, slot, subindex, roi, result):
+        key = roiToSlice(roi.start,roi.stop)
 
         #get start and stop coordinates of the requested OutputSlot area
         start, stop = sliceToRoi(key, self.shape)
@@ -285,13 +293,13 @@ class OpImageResizer(Operator):
         #calculate reading start and stop coordinates(of InputSlot)
         rstart = numpy.maximum(start / self.scaleFactor - edge * self.scaleFactor, start-start )
         rstart[-1] = start[-1] # do not enlarge channel dimension
-        rstop = numpy.minimum(stop / self.scaleFactor + edge * self.scaleFactor, self.inputs["Input"].shape)
+        rstop = numpy.minimum(stop / self.scaleFactor + edge * self.scaleFactor, self.inputs["Input"].meta.shape)
         rstop[-1] = stop[-1]# do not enlarge channel dimension
         #create reading key
         rkey = roiToSlice(rstart,rstop)
 
         #get the data of the InputSlot
-        img = numpy.ndarray(rstop-rstart,dtype=self.dtype)
+        img = numpy.ndarray(rstop-rstart,dtype=self.meta.dtype)
         img = self.inputs["Input"][rkey].allocate().wait()
 
         #create result array
@@ -315,16 +323,17 @@ class OpImageResizer(Operator):
         result[:] = res[subKey]
 
 
-    def notifyDirty(self,slot,key):
+    def propagateDirty(self, slot, subindex, roi):
+        key = roi.toSlice()
         self.outputs["Output"].setDirty(key)
 
     @property
     def shape(self):
-        return self.outputs["Output"]._shape
+        return self.outputs["Output"].meta.shape
 
     @property
     def dtype(self):
-        return self.outputs["Output"]._dtype
+        return self.outputs["Output"].meta.dtype
 
 
 class OpSwapAxes(Operator):
@@ -339,7 +348,7 @@ class OpSwapAxes(Operator):
 
     #this method is called when all InputSlot, in this example three,
     #are connected with an OutputSlot or a value is set.
-    def notifyConnectAll(self):
+    def setupOutputs(self):
         #new name for the InputSlot("Input")
         inputSlot = self.inputs["Input"]
 
@@ -347,18 +356,19 @@ class OpSwapAxes(Operator):
         axis2 = self.inputs["Axis2"].value
 
         #calculate the output shape
-        output_shape = numpy.array(inputSlot.shape)
+        output_shape = numpy.array(inputSlot.meta.shape)
         a = output_shape[axis1]
         output_shape[axis1] = output_shape[axis2]
         output_shape[axis2] = a
 
         #define the type, shape and axistags of the Output-Slot
-        self.outputs["Output"]._dtype = inputSlot.dtype
-        self.outputs["Output"]._shape = output_shape
-        self.outputs["Output"]._axistags = copy.copy(inputSlot.axistags)
+        self.outputs["Output"].meta.dtype = inputSlot.meta.dtype
+        self.outputs["Output"].meta.shape = output_shape
+        self.outputs["Output"].meta.axistags = copy.copy(inputSlot.meta.axistags)
 
     #this method does the swapping
-    def getOutSlot(self, slot, key, result):
+    def execute(self, slot, subindex, roi, result):
+        key = roiToSlice(roi.start,roi.stop)
 
         axis1 = self.inputs["Axis1"].value
         axis2 = self.inputs["Axis2"].value
@@ -384,16 +394,17 @@ class OpSwapAxes(Operator):
 
 
 
-    def notifyDirty(self,slot,key):
+    def propagateDirty(self, slot, subindex, roi):
+        key = roi.toSlice()
         self.outputs["Output"].setDirty(key)
 
     @property
     def shape(self):
-        return self.outputs["Output"]._shape
+        return self.outputs["Output"].meta.shape
 
     @property
     def dtype(self):
-        return self.outputs["Output"]._dtype
+        return self.outputs["Output"].meta.dtype
 
 
 
@@ -409,7 +420,7 @@ class OpSubregion(Operator):
 
     #this method is called when all InputSlot, in this example three,
     #are connected with an OutputSlot or a value is set.
-    def notifyConnectAll(self):
+    def setupOutputs(self):
         #new name for the InputSlot("Input")
         inputSlot = self.inputs["Input"]
 
@@ -417,16 +428,17 @@ class OpSubregion(Operator):
         stop = numpy.array(self.inputs["region_stop"].value)
 
         assert (stop>=start).all()
-        assert (stop <= numpy.array(self.inputs["Input"].shape )).all()
+        assert (stop <= numpy.array(self.inputs["Input"].meta.shape )).all()
         assert (start >= start - start).all()
 
         #define the type, shape and axistags of the Output-Slot
-        self.outputs["Output"]._dtype = inputSlot.dtype
-        self.outputs["Output"]._shape = tuple(stop - start)
-        self.outputs["Output"]._axistags = copy.copy(inputSlot.axistags)
+        self.outputs["Output"].meta.dtype = inputSlot.meta.dtype
+        self.outputs["Output"].meta.shape = tuple(stop - start)
+        self.outputs["Output"].meta.axistags = copy.copy(inputSlot.meta.axistags)
 
     #this method calculates the shifting
-    def getOutSlot(self, slot, key, result):
+    def execute(self, slot, subindex, roi, result):
+        key = roiToSlice(roi.start,roi.stop)
 
         #subregion start and stop
         start = self.inputs["region_start"].value
@@ -451,13 +463,14 @@ class OpSubregion(Operator):
         res = req()
         return res
 
-    def notifyDirty(self,slot,key):
+    def propagateDirty(self, slot, subindex, roi):
+        key = roi.toSlice()
         self.outputs["Output"].setDirty(key)
 
     @property
     def shape(self):
-        return self.outputs["Output"]._shape
+        return self.outputs["Output"].meta.shape
 
     @property
     def dtype(self):
-        return self.outputs["Output"]._dtype
+        return self.outputs["Output"].meta.dtype

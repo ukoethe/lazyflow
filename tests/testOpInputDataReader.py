@@ -3,22 +3,32 @@ import os
 import numpy
 import vigra
 import lazyflow.graph
+import tempfile
 
 class TestOpInputDataReader(object):
 
     @classmethod
     def setupClass(cls):
         cls.graph = lazyflow.graph.Graph()
-        cls.testNpyDataFileName = 'test.npy'
-        cls.testImageFileName = 'test.png'
-        cls.testH5FileName = 'test.h5'
+        tmpDir = tempfile.gettempdir()
+        cls.testNpyDataFileName = tmpDir + '/test.npy'
+        cls.testImageFileName = tmpDir + '/test.png'
+        cls.testH5FileName = tmpDir + '/test.h5'
 
     @classmethod
     def teardownClass(cls):
         # Clean up: Delete the test data files.
-        os.remove(cls.testNpyDataFileName)
-        os.remove(cls.testImageFileName)
-        os.remove(cls.testH5FileName)
+        filesToDelete = [ cls.testNpyDataFileName,
+                          cls.testImageFileName,
+                          cls.testH5FileName ]
+
+        for filename in filesToDelete:
+            try:
+                os.remove(filename)
+            except OSError:
+                # If one of the tests below failed early, the test file may not exist yet.
+                # Avoid an additional backtrace here so as not to obscure the real error.
+                pass
 
     def test_npy(self):
         # Create Numpy test data
@@ -63,18 +73,10 @@ class TestOpInputDataReader(object):
     def test_h5(self):
         # Create HDF5 test data
         import h5py
-        f = h5py.File(self.testH5FileName)
-        f.create_group('volume')
-        shape = (1,2,3,4,5)
-        f['volume'].create_dataset('data', shape)
-
-        for i in range(0,shape[0]):
-            for j in range(0,shape[1]):
-                for k in range(0,shape[2]):
-                    for l in range(0,shape[3]):
-                        for m in range(0,shape[4]):
-                            f['volume/data'][i,j,k,l,m] = i + j + k + l + m
-        f.close()
+        with h5py.File(self.testH5FileName) as f:
+            f.create_group('volume')
+            shape = (1,2,3,4,5)
+            f['volume'].create_dataset('data', data=numpy.indices(shape).sum(0).astype(numpy.float32))
 
         # Read the entire HDF5 file and verify the contents
         h5Reader = OpInputDataReader(graph=self.graph)
@@ -91,6 +93,13 @@ class TestOpInputDataReader(object):
                 for m in range(0,shape[4]):
                     assert h5Data[0,0,k,l,m] == k + l + m
 
+        # Call cleanUp() to close the file that this operator opened        
+        h5Reader.cleanUp()
+        assert not h5Reader._file # Whitebox assertion...
+
 if __name__ == "__main__":
+    import sys
     import nose
-    nose.main(defaultTest=__file__)
+    sys.argv.append("--nocapture")    # Don't steal stdout.  Show it on the console as usual.
+    sys.argv.append("--nologcapture") # Don't set the logging level to DEBUG.  Leave it alone.
+    nose.run(defaultTest=__file__)

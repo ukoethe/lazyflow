@@ -1,7 +1,9 @@
-from lazyflow.graph import *
+from lazyflow.graph import Operator, InputSlot, OutputSlot
 import lazyflow.roi
 import threading
 import copy
+
+import logging
 
 from operators import OpArrayCache, OpArrayPiper, OpMultiArrayPiper
 
@@ -9,15 +11,15 @@ from operators import OpArrayCache, OpArrayPiper, OpMultiArrayPiper
 class ArrayProvider(OutputSlot):
     def __init__(self, name, shape, dtype, axistags="not none"):
         OutputSlot.__init__(self,name)
-        self._shape = shape
-        self._dtype = dtype
+        self.meta.shape = shape
+        self.meta.dtype = dtype
         self._data = None
-        self._axistags = axistags
+        self.meta.axistags = axistags
         self._lock = threading.Lock()
 
     def setData(self,d):
-        assert d.dtype == self._dtype
-        assert d.shape == self._shape
+        assert d.dtype == self.meta.dtype
+        assert d.shape == self.meta.shape
         self._lock.acquire()
         self._data = d
         self._lock.release()
@@ -36,19 +38,20 @@ class ListToMultiOperator(Operator):
     name = "List to Multislot converter"
     category = "Input"
     inputSlots = [InputSlot("List", stype = "sequence")]
-    outputSlots = [MultiOutputSlot("Items", level = 1)]
+    outputSlots = [OutputSlot("Items", level = 1)]
 
-    def notifyConnectAll(self):
+    def setupOutputs(self):
         inputSlot = self.inputs["List"]
         liste = self.inputs["List"].value
         self.outputs["Items"].resize(len(liste))
         for o in self.outputs["Items"]:
-            o._dtype = object
-            o._shape = (1,)
+            o.meta.dtype = object
+            o.meta.shape = (1,)
 
-    def getSubOutSlot(self, slots, indexes, key, result):
+    def execute(self, slot, subindex, roi, result):
+        index = subindex[0]
         liste = self.inputs["List"].value
-        result[0] = liste[indexes[0]]
+        result[0] = liste[index]
 
 class OpAttributeSelector(Operator):
     """
@@ -73,16 +76,16 @@ class OpAttributeSelector(Operator):
         self.Result.meta.shape = (1,)
         self.Result.meta.dtype = object
 
-    def execute(self, slot, roi, result):
+    def execute(self, slot, subindex, roi, result):
         attrName = self.AttributeName.value
         inputObject = self.InputObject.value
         result[0] = getattr(inputObject, attrName)
 
-    def propagateDirty(self, islot, roi):
+    def propagateDirty(self, islot, subindex, roi):
         needToPropagate = False
 
         # We're only dirty if the field we're interested in changed
-        if islot == self.InputObject and self.AttributeName.configured():
+        if islot == self.InputObject and self.AttributeName.ready():
             attrName = self.AttributeName.value
             inputObject = self.InputObject.value
             newResult = getattr(inputObject, attrName)
@@ -113,11 +116,11 @@ class OpMetadataInjector(Operator):
         for k,v in extraMetadata.items():
             setattr(self.Output.meta, k, v)
 
-    def execute(self, slot, roi, result):
+    def execute(self, slot, subindex, roi, result):
         key = roi.toSlice()
         result[...] = self.Input(roi.start, roi.stop).wait()
 
-    def propagateDirty(self, slot, roi):
+    def propagateDirty(self, slot, subindex, roi):
         # Forward to the output slot
         self.Output.setDirty(roi)
 
@@ -134,10 +137,10 @@ class OpMetadataSelector(Operator):
         key = self.MetadataKey.value
         self.Output.setValue( self.Input.meta[key] )
 
-    def execute(self, slot, roi, result):
+    def execute(self, slot, subindex, roi, result):
         assert False # Output is directly connected
 
-    def propagateDirty(self, slot, roi):
+    def propagateDirty(self, slot, subindex, roi):
         # Output is dirty if the meta data attribute of interest changed.
         # Otherwise, not dirty.
         if slot.name == "MetadataKey":
@@ -158,7 +161,7 @@ class OpOutputProvider(Operator):
     def setupOutputs(self):
         pass
     
-    def execute(self, slot, roi, result):
+    def execute(self, slot, subindex, roi, result):
         key = roi.toSlice()
         result[...] = self._data[key]
 
@@ -191,7 +194,7 @@ class OpValueCache(Operator):
         self.Output.meta.assignFrom(self.Input.meta)
         self._dirty = True
     
-    def execute(self, slot, roi, result):
+    def execute(self, slot, subindex, roi, result):
         # Optimization: We don't let more than one caller trigger the value to be computed at the same time
         # If some other caller has already requested the value, we'll just wait for the request he already made.
         class State():
@@ -234,7 +237,7 @@ class OpValueCache(Operator):
                 self._request = None
                 self._dirty = False
 
-    def propagateDirty(self, islot, roi):
+    def propagateDirty(self, islot, subindex, roi):
         self._dirty = True
         self.Output.setDirty(roi)
 
@@ -248,16 +251,53 @@ class OpValueCache(Operator):
             self._dirty = False
             self.Output.setDirty(slice(None))
         
+class OpPrecomputedInput(Operator):
+    """
+    This operator uses its precomputed
+    """
+    name = "OpPrecomputedInput"
+    category = "Value provider"
+    
+    SlowInput = InputSlot() # Used if the precomputed slot is dirty
+    PrecomputedInput = InputSlot(optional=True) # Only used while the slow input stays clean.
+    Reset = InputSlot(optional = True, value = False)
+    
+    Output = OutputSlot()
+    
+    def __init__(self, *args, **kwargs):
+        super(OpPrecomputedInput, self).__init__(*args, **kwargs)
+        self._lock = threading.Lock()
+    
+    def setupOutputs(self):
+        if self.PrecomputedInput.ready():
+            self.reset()
+        else:
+            self.Output.connect(self.SlowInput)
 
+    def propagateDirty(self, slot, subindex, roi):
+        # If either input became dirty, the party is over.
+        # We can't use the pre-computed input anymore.
+        if slot == self.SlowInput:
+            with self._lock:
+                if self.Output.partner != self.SlowInput:
+                    self.Output.connect(self.SlowInput)
+                    self.Output.setDirty(roi)
+        elif slot == self.Reset:
+            pass
+        elif slot == self.PrecomputedInput:
+            pass
+        else:
+            assert False, "Unknown dirty input slot."
+    
+    def reset(self):
+        """
+        Called by the user when the precomputed input is valid again.
+        """
+        with self._lock:
+            self.Output.connect(self.PrecomputedInput)
 
-
-
-
-
-
-
-
-
+    def execute(self, slot, subindex, roi, result):
+        assert False, "Should not get here: Output is directly connected to the input."
 
 
 

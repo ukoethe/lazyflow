@@ -39,8 +39,8 @@ def randomKey(shape):
 def test(shape, blockshape):
 
     g = Graph()
-    opLabel = OpSparseLabelArray(g)
-    opLabelBlocked = OpBlockedSparseLabelArray(g)
+    opLabel = OpSparseLabelArray(graph=g)
+    opLabelBlocked = OpBlockedSparseLabelArray(graph=g)
 
     opLabel.inputs["shape"].setValue(shape[:-1] + (1,))
     opLabelBlocked.inputs["shape"].setValue(shape[:-1] + (1,))
@@ -65,8 +65,10 @@ def test(shape, blockshape):
         valuearray[:] = value
         print i, key, valuearray.shape
 
-        opLabel.setInSlot(opLabel.inputs["Input"], key, valuearray)
-        opLabelBlocked.setInSlot(opLabelBlocked.inputs["Input"], key, valuearray)
+        #opLabel.setInSlot(opLabel.inputs["Input"], key, valuearray)
+        opLabel.Input[key] = valuearray
+        #opLabelBlocked.setInSlot(opLabelBlocked.inputs["Input"], key, valuearray)
+        opLabelBlocked.Input[key] = valuearray
         out = opLabel.outputs["Output"][:].allocate().wait()
         #print "first done"
         outblocked = opLabelBlocked.outputs["Output"][:].allocate().wait()
@@ -89,8 +91,8 @@ def test(shape, blockshape):
 
 def veryRandomTest(shape, blockshape):
     g = Graph()
-    opLabel = OpSparseLabelArray(g)
-    opLabelBlocked = OpBlockedSparseLabelArray(g)
+    opLabel = OpSparseLabelArray(graph=g)
+    opLabelBlocked = OpBlockedSparseLabelArray(graph=g)
 
     opLabel.inputs["shape"].setValue(shape[:-1] + (1,))
     opLabelBlocked.inputs["shape"].setValue(shape[:-1] + (1,))
@@ -113,8 +115,10 @@ def veryRandomTest(shape, blockshape):
         valuearray = numpy.zeros(tuple(valueshape), dtype = numpy.uint8)
         valuearray[:] = value
 
-        opLabel.setInSlot(opLabel.inputs["Input"], key, valuearray)
-        opLabelBlocked.setInSlot(opLabelBlocked.inputs["Input"], key, valuearray)
+        #opLabel.setInSlot(opLabel.inputs["Input"], key, valuearray)
+        opLabel.Input[key] = valuearray
+        #opLabelBlocked.setInSlot(opLabelBlocked.inputs["Input"], key, valuearray)
+        opLabelBlocked.Input[key] = valuearray
 
         key2 = randomKey(shape)
         #key2 = (slice(37, 49, None), slice(38, 50, None), slice(28, 50, None), 0)
@@ -131,7 +135,7 @@ def veryRandomTest(shape, blockshape):
 
 def testBlocks(shape, blockshape):
     g = Graph()
-    opLabelBlocked = OpBlockedSparseLabelArray(g)
+    opLabelBlocked = OpBlockedSparseLabelArray(graph=g)
     opLabelBlocked.inputs["shape"].setValue(shape[:-1] + (1,))
 
     opLabelBlocked.inputs["blockShape"].setValue(blockshape)
@@ -142,6 +146,7 @@ def testBlocks(shape, blockshape):
     value[:] = 33
 
     opLabelBlocked.setInSlot(opLabelBlocked.inputs["Input"], key, value)
+    opLabelBlocked.Input[key] = value
 
     blocklist = opLabelBlocked.outputs["nonzeroBlocks"][:].allocate().wait()
     print blocklist
@@ -162,7 +167,8 @@ def testBlocks(shape, blockshape):
         value[:] = 33
         newkey = [x for x in key]
         newkey.append(0)
-        opLabelBlocked.setInSlot(opLabelBlocked.inputs["Input"], newkey, value)
+        #opLabelBlocked.setInSlot(opLabelBlocked.inputs["Input"], newkey, value)
+        opLabelBlocked.Input[newkey] = value
         blocklist = opLabelBlocked.outputs["nonzeroBlocks"][:].allocate().wait()
         print blocklist
 

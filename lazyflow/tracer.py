@@ -15,22 +15,22 @@ class Tracer(object):
         Function f is running...
         DEBUG TRACE.mymodule:__exit__: f
     """
-    def __init__(self, logger, level=logging.DEBUG, msg='', print_caller=True):
+    def __init__(self, logger, level=logging.DEBUG, msg='', determine_caller=True, caller_name=''):
         if type(logger) == str:
             self._logger = logging.getLogger(logger)
         else:
             self._logger = logger
         self._level = level
-        self._caller = ''
-        self._print_caller = print_caller
+        self._determine_caller = determine_caller
         self._msg = msg
+        self._caller = caller_name
 
     def __enter__(self):
         if self._logger.isEnabledFor( self._level ):
-            if self._print_caller:
+            if self._determine_caller and self._caller == '':
                 stack = inspect.stack()
-                self._caller = stack[1][3] + ' '
-            self._logger.log(self._level, "(enter) " + self._caller + self._msg)
+                self._caller = stack[1][3]
+            self._logger.log(self._level, "(enter) " + self._caller + ' ' + self._msg)
 
     def __exit__(self, *args):
         if self._logger.isEnabledFor( self._level ):
@@ -38,19 +38,23 @@ class Tracer(object):
 
 from functools import wraps
 
-def traceLogged(logger, suffix=''):
+def traceLogged(logger, level=logging.DEBUG, msg='', caller_name=''):
     """Returns a decorator that logs the entry and exit of its target function."""
     def decorator(func):
         """A closure that logs the entry and exit of func using the logger."""
-        if hasattr(func, 'im_func'):
+
+        if caller_name != '':
+            name = caller_name
+        elif hasattr(func, 'im_func'):
             name = func.im_func.func_name
         else:
             name = func.func_name
             
         @wraps(func)
         def wrapper(*args, **kwargs):
-            with Tracer(logger, msg=name, print_caller=False):
+            with Tracer(logger, level=level, msg=msg, determine_caller=False, caller_name=name):
                 return func(*args, **kwargs)
+        wrapper.__wrapped__ = func # Emulate python 3 behavior of @wraps
         return wrapper
     return decorator
 

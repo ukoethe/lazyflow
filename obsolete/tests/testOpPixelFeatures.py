@@ -18,7 +18,7 @@ def test_OpPixelFeatures__T1():
 
     g = Graph()
 
-    OpG = OpPixelFeatures(g)
+    OpG = OpPixelFeatures(graph=g)
 
     inputImage = vigra.impex.readImage("ostrich.jpg")
 
@@ -39,10 +39,10 @@ def test_OpPixelFeatures__T1():
     vigra.impex.writeImage(dest3,"F2_T1_resultOpT1G3.jpg")
 
     print "Shape 1"
-    print OpG.outputs["Output"].shape
+    print OpG.outputs["Output"].meta.shape
     print "_________"
 
-    shape1 = OpG.outputs["Output"].shape
+    shape1 = OpG.outputs["Output"].meta.shape
 
     OpG.inputs["Matrix"].setValue(numpy.array([[1,1,0,0],[0,1,1,0],[1,0,1,0],[1,0,0,1],[0,1,0,0],[0,1,0,0]]))
 
@@ -61,7 +61,7 @@ def test_OpPixelFeatures__T1():
     vigra.impex.writeImage(dest3,"F2_T1_resultOpT2G3.jpg")
 
     print "Shape 2"
-    print OpG.outputs["Output"].shape
+    print OpG.outputs["Output"].meta.shape
     print "_________"
 
 
@@ -82,11 +82,11 @@ def test_OpPixelFeatures__T1():
     vigra.impex.writeImage(dest3,"F2_T1_resultOpT3G3.jpg")
 
     print "Shape 3"
-    print OpG.outputs["Output"].shape
+    print OpG.outputs["Output"].meta.shape
     print "_________"
 
 
-    shape3 = OpG.outputs["Output"].shape
+    shape3 = OpG.outputs["Output"].meta.shape
 
     if shape3 != shape1:
         print "ERROR!!!!!!"
@@ -105,7 +105,7 @@ def test_OpPixelFeatures__T2():
     g = Graph()
 
 
-    OpG = OpPixelFeatures(g)
+    OpG = OpPixelFeatures(graph=g)
 
     inputImage = vigra.impex.readImage("ostrich.jpg")
 
@@ -113,7 +113,7 @@ def test_OpPixelFeatures__T2():
     OpG.inputs["Matrix"].setValue(numpy.array([[1,1,0,0],[0,1,0,0],[0,1,0,0],[1,0,0,1]]))
     OpG.inputs["Scales"].setValue([1,.20,0.30,0.40])
 
-    print OpG.outputs["Output"].shape
+    print OpG.outputs["Output"].meta.shape
 
     dest1 = OpG.outputs["Output"][:,:,0,0,0:3].allocate().wait()
     dest2= OpG.outputs["Output"][:,:,0,0,3:6].allocate().wait()
@@ -148,11 +148,11 @@ def test_OpPixelFeatures__T3():
 
     g = Graph()
 
-    OpPI = Op5ToMulti(g)
+    OpPI = Op5ToMulti(graph=g)
 
-    OpPS = Op5ToMulti(g)
+    OpPS = Op5ToMulti(graph=g)
 
-    OpG = OpPixelFeaturesPresmoothed(g)
+    OpG = OpPixelFeaturesPresmoothed(graph=g)
 
     inputImage = vigra.impex.readImage("ostrich.jpg")
 
@@ -176,10 +176,10 @@ def test_OpPixelFeatures__T3():
     vigra.impex.writeImage(dest3,"F2_T3_resultOpT1G3.jpg")
 
     print "Shape 1"
-    print OpG.outputs["Output"].shape
+    print OpG.outputs["Output"].meta.shape
     print "_________"
 
-    shape1 = OpG.outputs["Output"].shape
+    shape1 = OpG.outputs["Output"].meta.shape
 
     OpG.inputs["Matrix"].setValue(numpy.array([[1,1,0,0],[0,1,1,0],[1,0,1,0],[1,0,0,1],[0,1,0,0],[0,1,0,0]]))
 
@@ -198,7 +198,7 @@ def test_OpPixelFeatures__T3():
     vigra.impex.writeImage(dest3,"F2_T3_resultOpT2G3.jpg")
 
     print "Shape 2"
-    print OpG.outputs["Output"].shape
+    print OpG.outputs["Output"].meta.shape
     print "_________"
 
 
@@ -219,11 +219,11 @@ def test_OpPixelFeatures__T3():
     vigra.impex.writeImage(dest3,"F2_T3_resultOpT3G3.jpg")
 
     print "Shape 3"
-    print OpG.outputs["Output"].shape
+    print OpG.outputs["Output"].meta.shape
     print "_________"
 
 
-    shape3 = OpG.outputs["Output"].shape
+    shape3 = OpG.outputs["Output"].meta.shape
 
     if shape3 != shape1:
         print "ERROR!!!!!!"

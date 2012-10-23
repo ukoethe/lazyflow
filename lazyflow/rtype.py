@@ -1,6 +1,7 @@
 from roi import sliceToRoi, roiToSlice
 import vigra,numpy,copy
 from lazyflow.roi import TinyVector
+from lazyflow import slicingtools
 
 class Roi(object):
     def __init__(self, slot):
@@ -8,14 +9,40 @@ class Roi(object):
         pass
     pass
 
+
+
+class Everything(Roi):
+    '''Fallback Roi for Slots that can't operate on subsets of their input data.'''
+    pass
+
+
+class List(Roi):
+    def __init__(self, slot, iterable=()):
+        super(List, self).__init__(slot)
+        self._l = list(iterable)
+    def __iter__( self ):
+        return iter(self._l)
+    def __len__( self ):
+        return len(self._l)
+    def __str__( self ):
+        return str(self._l)
+
+
+    
 class SubRegion(Roi):
     def __init__(self, slot, start = None, stop = None, pslice = None):
         super(SubRegion,self).__init__(slot)
         if pslice != None or start is not None and stop is None and pslice is None:
             if pslice is None:
                 pslice = start
-            assert self.slot.meta.shape is not None
-            self.start, self.stop = sliceToRoi(pslice,self.slot.meta.shape)
+            shape = self.slot.meta.shape
+            if shape is None:
+                # Okay to use a shapeless slot if the key is bounded
+                # AND if the key has the correct length
+                assert slicingtools.is_bounded(pslice)
+                # Supply a dummy shape
+                shape = [0] * len(pslice)
+            self.start, self.stop = sliceToRoi(pslice,shape)
         elif start is None and pslice is None:
             self.start, self.stop = sliceToRoi(slice(None,None,None),self.slot.meta.shape)
         else:

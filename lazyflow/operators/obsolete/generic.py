@@ -1,7 +1,10 @@
-from lazyflow.graph import *
+from lazyflow.graph import Graph, Operator, InputSlot, OutputSlot
 from lazyflow import roi
-
+from lazyflow.roi import roiToSlice, sliceToRoi
 import logging
+import numpy
+import vigra
+import copy
 logger = logging.getLogger(__name__)
 traceLogger = logging.getLogger("TRACE." + __name__)
 from lazyflow.tracer import Tracer
@@ -78,23 +81,20 @@ class OpMultiArraySlicer(Operator):
     The sliced axis is discarded in the output image shape.
     """
     inputSlots = [InputSlot("Input"),InputSlot('AxisFlag')]
-    outputSlots = [MultiOutputSlot("Slices",level=1)]
+    outputSlots = [OutputSlot("Slices",level=1)]
 
     name = "Multi Array Slicer"
     category = "Misc"
 
-    def notifyConnectAll(self):
-
-        dtype=self.inputs["Input"].dtype
+    def setupOutputs(self):
         flag=self.inputs["AxisFlag"].value
 
-        indexAxis=self.inputs["Input"].axistags.index(flag)
-        outshape=list(self.inputs["Input"].shape)
+        indexAxis=self.inputs["Input"].meta.axistags.index(flag)
+        outshape=list(self.inputs["Input"].meta.shape)
         n=outshape.pop(indexAxis)
         outshape=tuple(outshape)
 
-        outaxistags=copy.copy(self.inputs["Input"].axistags)
-
+        outaxistags=copy.copy(self.inputs["Input"].meta.axistags)
         del outaxistags[flag]
 
         self.outputs["Slices"].resize(n)
@@ -105,22 +105,20 @@ class OpMultiArraySlicer(Operator):
             o.meta.axistags = outaxistags
             o.meta.shape = outshape
 
-    def getSubOutSlot(self, slots, indexes, key, result):
-
+    def execute(self, slot, subindex, rroi, result):
+        key = roiToSlice(rroi.start, rroi.stop)
+        index = subindex[0]
         #print "SLICER: key", key, "indexes[0]", indexes[0], "result", result.shape
-
-        start,stop=roi.sliceToRoi(key,self.outputs["Slices"][indexes[0]].shape)
-
-        oldstart,oldstop=start,stop
+        start,stop=roi.sliceToRoi(key,self.outputs["Slices"][index].meta.shape)
 
         start=list(start)
         stop=list(stop)
 
         flag=self.inputs["AxisFlag"].value
-        indexAxis=self.inputs["Input"].axistags.index(flag)
+        indexAxis=self.inputs["Input"].meta.axistags.index(flag)
 
-        start.insert(indexAxis,indexes[0])
-        stop.insert(indexAxis,indexes[0])
+        start.insert(indexAxis,index)
+        stop.insert(indexAxis,index)
 
         newKey=roi.roiToSlice(numpy.array(start),numpy.array(stop))
 
@@ -130,8 +128,30 @@ class OpMultiArraySlicer(Operator):
         writeKey.insert(indexAxis, 0)
         writeKey = tuple(writeKey)
 
-        result[:]=ttt[writeKey ]#+ (0,)]
+        return ttt[writeKey ]#+ (0,)]
 
+    def propagateDirty(self, slot, subindex, roi):
+        if slot == self.AxisFlag:
+            for i,s in enumerate(self.Slices):
+                s.setDirty( slice(None) )
+        elif slot == self.Input:
+            key = roi.toSlice()
+            reducedKey = list(key)
+            inputTags = self.Input.meta.axistags
+            flag = self.AxisFlag.value
+            axisSlice = reducedKey.pop( inputTags.index(flag) )
+            
+            axisStart, axisStop = axisSlice.start, axisSlice.stop
+            if axisStart is None:
+                axisStart = 0
+            if axisStop is None:
+                axisStop = len( self.Slices )
+    
+            for i in range(axisStart, axisStop):
+                self.Slices[i].setDirty( reducedKey )
+        else:
+            assert False, "Unknown dirty input slot"
+        
 
 class OpMultiArraySlicer2(Operator):
     """
@@ -141,20 +161,24 @@ class OpMultiArraySlicer2(Operator):
     """
     #FIXME: This operator return a sigleton in the sliced direction
     #Should be integrated with the above one to have a more consistent notation
-    inputSlots = [InputSlot("Input"),InputSlot('AxisFlag')]
-    outputSlots = [MultiOutputSlot("Slices",level=1)]
+    inputSlots = [InputSlot("Input"),InputSlot('AxisFlag'), InputSlot("SliceIndexes", optional=True)]
+    outputSlots = [OutputSlot("Slices",level=1)]
 
     name = "Multi Array Slicer"
     category = "Misc"
+
+    def __init__(self, *args, **kwargs):
+        super(OpMultiArraySlicer2, self).__init__(*args, **kwargs)
+        self.inputShape = None
 
     def setupOutputs(self):
         dtype=self.inputs["Input"].meta.dtype
         flag=self.inputs["AxisFlag"].value
 
         indexAxis=self.inputs["Input"].meta.axistags.index(flag)
-        outshape=list(self.inputs["Input"].meta.shape)
-        n=outshape.pop(indexAxis)
-
+        inshape=list(self.inputs["Input"].meta.shape)
+        outshape = list(inshape)
+        outshape.pop(indexAxis)
         outshape.insert(indexAxis, 1)
         outshape=tuple(outshape)
 
@@ -162,29 +186,39 @@ class OpMultiArraySlicer2(Operator):
 
         #del outaxistags[flag]
 
-        self.outputs["Slices"].resize(n)
+        sliceIndexes = self.getSliceIndexes()
+        self.outputs["Slices"].resize( len(sliceIndexes) )
 
-        for i in range(n):
-            o = self.outputs["Slices"][i]
+        for i, oslot in enumerate(self.Slices):
             # Output metadata is a modified copy of the input's metadata
-            o.meta.assignFrom( self.Input.meta )
-            o.meta.axistags = outaxistags
-            o.meta.shape = outshape
+            oslot.meta.assignFrom( self.Input.meta )
+            oslot.meta.axistags = outaxistags
+            oslot.meta.shape = outshape
 
-        # If our input slot changes shape, we need to set up again        
-        self.Input.notifyMetaChanged(self.handleInputMetaChanged)
-        
-    def handleInputMetaChanged(self, *args):
-        # Note that we're calling the underscore version here so that changes are propagated to our partners
-        # FIXME: There should be a more straightforward way of doing this...
-        if self.configured():
-            self._setupOutputs()
+        inputShape = self.Input.meta.shape
+        if self.inputShape != inputShape:
+            self.inputShape = inputShape
+            for i, oslot in enumerate(self.Slices):
+                oslot.setDirty(slice(None))
 
-    def getSubOutSlot(self, slots, indexes, key, result):
+    def getSliceIndexes(self):
+        if self.SliceIndexes.ready():
+            return self.SliceIndexes.value
+        else:
+            # Default is all indexes of the sliced axis
+            flag = self.inputs["AxisFlag"].value
+            axistags = self.inputs["Input"].meta.axistags
+            indexAxis = axistags.index(flag)
+            inshape = self.inputs["Input"].meta.shape
+            return list( range( inshape[indexAxis] ) )
+    
+    def execute(self, slot, subindex, rroi, result):
+        key = roiToSlice(rroi.start, rroi.stop)
+        index = subindex[0]
+        # Index of the input slice this data will come from.
+        sliceIndex = self.getSliceIndexes()[index]
 
-        outshape = self.outputs["Slices"][indexes[0]].shape
-
-
+        outshape = self.outputs["Slices"][index].meta.shape
         start,stop=roi.sliceToRoi(key,outshape)
         oldstart,oldstop=start,stop
 
@@ -192,29 +226,47 @@ class OpMultiArraySlicer2(Operator):
         stop=list(stop)
 
         flag=self.inputs["AxisFlag"].value
-        indexAxis=self.inputs["Input"].axistags.index(flag)
+        indexAxis=self.inputs["Input"].meta.axistags.index(flag)
 
         start.pop(indexAxis)
         stop.pop(indexAxis)
 
-        start.insert(indexAxis,indexes[0])
-        stop.insert(indexAxis,indexes[0])
-
+        start.insert(indexAxis, sliceIndex)
+        stop.insert(indexAxis, sliceIndex)
 
         newKey=roi.roiToSlice(numpy.array(start),numpy.array(stop))
 
         ttt = self.inputs["Input"][newKey].allocate().wait()
-        result[:]=ttt[:]
+        return ttt[:]
+
+    def propagateDirty(self, inputSlot, subindex, roi):
+        if inputSlot == self.AxisFlag or inputSlot == self.SliceIndexes:
+            # AxisFlag or slice set changed.  Everything is dirty
+            for i, slot in enumerate(self.Slices):
+                slot.setDirty(slice(None))
+        elif inputSlot == self.Input:
+            # Mark each of the intersected slices as dirty
+            channelAxis = self.Input.meta.axistags.index('c')
+            channels = zip(roi.start, roi.stop)[channelAxis]
+            for i in range(*channels):
+                if i < len(self.Slices):
+                    slot = self.Slices[i]
+                    sliceRoi = copy.copy(roi)
+                    sliceRoi.start[channelAxis] = 0
+                    sliceRoi.stop[channelAxis] = 1
+                    slot.setDirty(sliceRoi)
+        else:
+            assert False, "Unknown dirty input slot."
 
 class OpMultiArrayStacker(Operator):
-    inputSlots = [MultiInputSlot("Images"), InputSlot("AxisFlag"), InputSlot("AxisIndex")]
+    inputSlots = [InputSlot("Images", level=1), InputSlot("AxisFlag"), InputSlot("AxisIndex")]
     outputSlots = [OutputSlot("Output")]
 
     name = "Multi Array Stacker"
     description = "Stack inputs on any axis, including the ones which are not there yet"
     category = "Misc"
 
-    def notifyConnectAll(self):
+    def setupOutputs(self):
         #This function is needed so that we don't depend on the order of connections.
         #If axis flag or axis index is connected after the input images, the shape is calculated
         #here
@@ -227,39 +279,41 @@ class OpMultiArrayStacker(Operator):
         axisindex = self.inputs["AxisIndex"].value
 
         for inSlot in self.inputs["Images"]:
-            inTagKeys = [ax.key for ax in inSlot.axistags]
+            inTagKeys = [ax.key for ax in inSlot.meta.axistags]
             if inSlot.partner is not None:
-                self.outputs["Output"]._dtype = inSlot.dtype
-                self.outputs["Output"]._axistags = copy.copy(inSlot.axistags)
-                #indexAxis=inSlot.axistags.index(flag)
+                self.outputs["Output"].meta.dtype = inSlot.meta.dtype
+                self.outputs["Output"].meta.axistags = copy.copy(inSlot.meta.axistags)
+                #indexAxis=inSlot.meta.axistags.index(flag)
 
-                outTagKeys = [ax.key for ax in self.outputs["Output"]._axistags]
+                outTagKeys = [ax.key for ax in self.outputs["Output"].meta.axistags]
 
                 if not flag in outTagKeys:
-                    self.outputs["Output"]._axistags.insert(axisindex, vigra.AxisInfo(flag, axisType(flag)))
+                    self.outputs["Output"].meta.axistags.insert(axisindex, vigra.AxisInfo(flag, axisType(flag)))
                 if flag in inTagKeys:
-                    c += inSlot.shape[inSlot.axistags.index(flag)]
+                    c += inSlot.meta.shape[inSlot.meta.axistags.index(flag)]
                 else:
                     c += 1
 
         if len(self.inputs["Images"]) > 0:
-            newshape = list(self.inputs["Images"][0].shape)
+            newshape = list(self.inputs["Images"][0].meta.shape)
             if flag in inTagKeys:
                 #here we assume that all axis are present
                 newshape[axisindex]=c
             else:
                 newshape.insert(axisindex, c)
-            self.outputs["Output"]._shape=tuple(newshape)
+            self.outputs["Output"].meta.shape=tuple(newshape)
         else:
-            self.outputs["Output"]._shape = None
+            self.outputs["Output"].meta.shape = None
 
 
 
-    def getOutSlot(self, slot, key, result):
+    def execute(self, slot, subindex, rroi, result):
+        key = roiToSlice(rroi.start,rroi.stop)
+
         cnt = 0
         written = 0
-        start, stop = roi.sliceToRoi(key, self.outputs["Output"].shape)
-        assert (stop<=self.outputs["Output"].shape).all()
+        start, stop = roi.sliceToRoi(key, self.outputs["Output"].meta.shape)
+        assert (stop<=self.outputs["Output"].meta.shape).all()
         axisindex = self.inputs["AxisIndex"].value
         flag = self.inputs["AxisFlag"].value
         #ugly-ugly-ugly
@@ -274,9 +328,9 @@ class OpMultiArrayStacker(Operator):
         for i, inSlot in enumerate(self.inputs['Images']):
             if inSlot.connected():
                 req = None
-                inTagKeys = [ax.key for ax in inSlot.axistags]
+                inTagKeys = [ax.key for ax in inSlot.meta.axistags]
                 if flag in inTagKeys:
-                    slices = inSlot.shape[axisindex]
+                    slices = inSlot.meta.shape[axisindex]
                     if cnt + slices >= start[axisindex] and start[axisindex]-cnt<slices and start[axisindex]+written<stop[axisindex]:
                         begin = 0
                         if cnt < start[axisindex]:
@@ -295,7 +349,7 @@ class OpMultiArrayStacker(Operator):
                 else:
                     if cnt>=start[axisindex] and start[axisindex] + written < stop[axisindex]:
                         #print "key: ", key, "reskey: ", reskey, "oldkey: ", oldkey
-                        #print "result: ", result.shape, "inslot:", inSlot.shape
+                        #print "result: ", result.shape, "inslot:", inSlot.meta.shape
                         reskey = [slice(None, None, None) for s in oldkey]
                         reskey.insert(axisindex, written)
                         destArea = result[tuple(reskey)]
@@ -309,6 +363,11 @@ class OpMultiArrayStacker(Operator):
         for r in requests:
             r.wait()
 
+    def propagateDirty(self, inputSlot, subindex, roi):
+        if inputSlot == self.AxisFlag or inputSlot == self.AxisIndex:
+            self.Output.setDirty( slice(None) )
+        else:
+            assert False, "Unknown input slot."
 
 
 class OpSingleChannelSelector(Operator):
@@ -318,24 +377,27 @@ class OpSingleChannelSelector(Operator):
     inputSlots = [InputSlot("Input"),InputSlot("Index",stype='integer')]
     outputSlots = [OutputSlot("Output")]
 
-    def notifyConnectAll(self):
-        self.outputs["Output"]._dtype =self.inputs["Input"].dtype
-        self.outputs["Output"]._shape = self.inputs["Input"].shape[:-1]+(1,)
-        self.outputs["Output"]._axistags = self.inputs["Input"].axistags
+    def setupOutputs(self):
+        inputtags = self.Input.meta.axistags
+        assert inputtags.channelIndex == len(inputtags)-1, "FIXME: OpSingleChannelSelector assumes the channel axis is last."
 
-    def getOutSlot(self, slot, key, result):
+        self.Output.meta.assignFrom(self.Input.meta)
+        self.Output.meta.shape = self.Input.meta.shape[:-1]+(1,)
+
+    def execute(self, slot, subindex, roi, result):
+        key = roiToSlice(roi.start,roi.stop)
 
         index=self.inputs["Index"].value
-        #FIXME: check the axistags for a multichannel image
-        assert self.inputs["Input"].shape[-1] > index, ("Requested channel, %d, is out of Range" % index)
+        assert self.inputs["Input"].meta.shape[-1] > index, ("Requested channel, %d, is out of Range" % index)
 
         # Only ask for the channel we need
         newKey = key[:-1] + (slice(index,index+1),)
 
         im=self.inputs["Input"][newKey].wait()
-        result[...,0]=im[...,0] # Copy into the (only) channel of our result
+        return im[...,0:1] # Copy into the (only) channel of our result
 
-    def notifyDirty(self, slot, key):
+    def propagateDirty(self, slot, subindex, roi):
+        key = roi.toSlice()
         if slot == self.Input:
             key = key[:-1] + (slice(0,1,None),)
             self.outputs["Output"].setDirty(key)
@@ -350,92 +412,118 @@ class OpSubRegion(Operator):
     name = "OpSubRegion"
     description = "Select a region of interest from an numpy array"
 
-    inputSlots = [InputSlot("Input"), InputSlot("Start"), InputSlot("Stop")]
+    inputSlots = [InputSlot("Input"), InputSlot("Start"), InputSlot("Stop"), InputSlot("propagate_dirty", value = True)]
     outputSlots = [OutputSlot("Output")]
+    
+    def __init__(self, *args, **kwargs):
+        Operator.__init__(self, *args, **kwargs)
+        self._propagate_dirty = False
 
-    def notifyConnectAll(self):
-        with Tracer(traceLogger):
-            start = self.inputs["Start"].value
-            stop = self.inputs["Stop"].value
-            assert isinstance(start, tuple)
-            assert isinstance(stop, tuple)
-            assert len(start) == len(self.inputs["Input"].shape)
-            assert len(start) == len(stop)
-            assert (numpy.array(stop)>= numpy.array(start)).all()
-        
-            temp = tuple(numpy.array(stop) - numpy.array(start))
-            #drop singleton dimensions
-            outShape = ()
-            for e in temp:
-                if e > 0:
-                    outShape = outShape + (e,)
-        
-            self.outputs["Output"]._shape = outShape
-            self.outputs["Output"]._axistags = self.inputs["Input"].axistags
-            self.outputs["Output"]._dtype = self.inputs["Input"].dtype
+    def setupOutputs(self):
+        self._propagate_dirty = self.propagate_dirty.value
+        start = self.inputs["Start"].value
+        stop = self.inputs["Stop"].value
+        assert isinstance(start, tuple)
+        assert isinstance(stop, tuple)
+        assert len(start) == len(self.inputs["Input"].meta.shape)
+        assert len(start) == len(stop)
+        assert (numpy.array(stop)>= numpy.array(start)).all()
+    
+        temp = tuple(numpy.array(stop) - numpy.array(start))
+        #drop singleton dimensions
+        outShape = ()
+        for e in temp:
+            if e > 0:
+                outShape = outShape + (e,)
 
-    def getOutSlot(self, slot, key, resultArea):
-        with Tracer(traceLogger):
-            start = self.inputs["Start"].value
-            stop = self.inputs["Stop"].value
-    
-            temp = tuple()
-            for i in xrange(len(start)):
-                if stop[i] - start[i] > 0:
-                    temp += (stop[i]-start[i],)
-    
-            readStart, readStop = sliceToRoi(key, temp)
-    
-    
-    
-            newKey = ()
-            resultKey = ()
-            i = 0
-            i2 = 0
-            for kkk in xrange(len(start)):
-                e = stop[kkk] - start[kkk]
-                if e > 0:
-                    newKey += (slice(start[i2] + readStart[i], start[i2] + readStop[i],None),)
-                    resultKey += (slice(0,temp[i2],None),)
-                    i +=1
-                else:
-                    newKey += (slice(start[i2], start[i2], None),)
-                    resultKey += (0,)
-                i2 += 1
-    
-            res = self.inputs["Input"][newKey].allocate().wait()
-            resultArea[:] = res[resultKey]
+        self.Output.meta.assignFrom(self.Input.meta)
+        self.Output.meta.shape = outShape        
+
+    def execute(self, slot, subindex, roi, result):
+        key = roiToSlice(roi.start,roi.stop)
+
+        start = self.inputs["Start"].value
+        stop = self.inputs["Stop"].value
+
+        temp = tuple()
+        for i in xrange(len(start)):
+            if stop[i] - start[i] > 0:
+                temp += (stop[i]-start[i],)
+
+        readStart, readStop = sliceToRoi(key, temp)
 
 
 
+        newKey = ()
+        resultKey = ()
+        i = 0
+        i2 = 0
+        for kkk in xrange(len(start)):
+            e = stop[kkk] - start[kkk]
+            if e > 0:
+                newKey += (slice(start[i2] + readStart[i], start[i2] + readStop[i],None),)
+                resultKey += (slice(0,temp[i2],None),)
+                i +=1
+            else:
+                newKey += (slice(start[i2], start[i2], None),)
+                resultKey += (0,)
+            i2 += 1
+
+        res = self.inputs["Input"][newKey].allocate().wait()
+        result[:] = res[resultKey]
+
+    def propagateDirty(self, dirtySlot, subindex, roi):
+        if self._propagate_dirty and dirtySlot == self.Input:
+            # Translate the input key to a small subregion key
+            smallstart = roi.start - self.Start.value
+            smallstop = roi.stop - self.Start.value
+            
+            # Clip to our output shape
+            smallstart = numpy.maximum(smallstart, 0)
+            smallstop = numpy.minimum(smallstop, self.Output.meta.shape)
+
+            # If there's an intersection with our output,
+            #  propagate dirty region to output
+            if ((smallstop - smallstart ) > 0).all():
+                self.Output.setDirty( smallstart, smallstop )
 
 class OpMultiArrayMerger(Operator):
-    inputSlots = [MultiInputSlot("Inputs"),InputSlot('MergingFunction')]
+    inputSlots = [InputSlot("Inputs", level=1),InputSlot('MergingFunction')]
     outputSlots = [OutputSlot("Output")]
 
     name = "Merge Multi Arrays based on a variadic merging function"
     category = "Misc"
 
-    def notifyConnectAll(self):
+    def setupOutputs(self):
+        shape=self.inputs["Inputs"][0].meta.shape
+        axistags=copy.copy(self.inputs["Inputs"][0].meta.axistags)
 
-        shape=self.inputs["Inputs"][0].shape
-        axistags=copy.copy(self.inputs["Inputs"][0].axistags)
-
-
-        self.outputs["Output"]._shape = shape
-        self.outputs["Output"]._axistags = axistags
-        self.outputs["Output"]._dtype = self.inputs["Inputs"][0].dtype
-
-
+        self.outputs["Output"].meta.shape = shape
+        self.outputs["Output"].meta.axistags = axistags
+        self.outputs["Output"].meta.dtype = self.inputs["Inputs"][0].meta.dtype
 
         for input in self.inputs["Inputs"]:
-            assert input.shape==shape, "Only possible merging consistent shapes"
-            assert input.axistags==axistags, "Only possible merging same axistags"
+            assert input.meta.shape==shape, "Only possible merging consistent shapes"
+            assert input.meta.axistags==axistags, "Only possible merging same axistags"
 
+        # If *all* inputs have a drange, then provide a drange for the output.
+        # Note: This assumes the merging function is pixel-wise
+        dranges = []
+        for i,slot in enumerate(self.Inputs):
+            dr = slot.meta.drange
+            if dr is not None:
+                dranges.append(numpy.array(dr))
+            else:
+                dranges = []
+                break
+        
+        if len(dranges) > 0:
+            fun = self.MergingFunction.value
+            outRange = fun(dranges)
+            self.Output.meta.drange = tuple(outRange)
 
-
-    def getOutSlot(self, slot, key, result):
-
+    def execute(self, slot, subindex, roi, result):
+        key = roiToSlice(roi.start,roi.stop)
         requests=[]
         for input in self.inputs["Inputs"]:
             requests.append(input[key].allocate())
@@ -443,12 +531,18 @@ class OpMultiArrayMerger(Operator):
         data=[]
         for req in requests:
             data.append(req.wait())
-
+        
         fun=self.inputs["MergingFunction"].value
 
-        result[:]=fun(data)
+        return fun(data)
 
-
+    def propagateDirty(self, dirtySlot, subindex, roi):
+        if dirtySlot == self.MergingFunction:
+            self.Output.setDirty( slice(None) )
+        elif dirtySlot == self.Inputs:
+            # Assumes a pixel-wise merge function.
+            key = roi.toSlice()
+            self.Output.setDirty( key )
 
 class OpPixelOperator(Operator):
     name = "OpPixelOperator"
@@ -457,45 +551,47 @@ class OpPixelOperator(Operator):
     inputSlots = [InputSlot("Input"), InputSlot("Function")]
     outputSlots = [OutputSlot("Output")]
 
-    def notifyConnectAll(self):
-
+    def setupOutputs(self):
         inputSlot = self.inputs["Input"]
 
         self.function = self.inputs["Function"].value
 
-        self.outputs["Output"]._shape = inputSlot.shape
-        self.outputs["Output"]._dtype = inputSlot.dtype
-        self.outputs["Output"]._axistags = inputSlot.axistags
+        self.outputs["Output"].meta.shape = inputSlot.meta.shape
+        self.outputs["Output"].meta.dtype = inputSlot.meta.dtype
+        self.outputs["Output"].meta.axistags = inputSlot.meta.axistags
 
-
-
-    def getOutSlot(self, slot, key, result):
-
+    def execute(self, slot, subindex, roi, result):
+        key = roiToSlice(roi.start,roi.stop)
 
         matrix = self.inputs["Input"][key].allocate().wait()
         matrix = self.function(matrix)
 
-        result[:] = matrix[:]
+        return matrix[:]
 
-
-    def notifyDirty(selfut,slot,key):
-        self.outputs["Output"].setDirty(key)
+    def propagateDirty(self, slot, subindex, roi):
+        key = roi.toSlice()
+        if slot == self.Input:
+            self.outputs["Output"].setDirty(key)
+        elif slot == self.Function:
+            self.Output.setDirty( slice(None) )
+        else:
+            assert False, "Unknown dirty input slot"
 
     @property
     def shape(self):
-        return self.outputs["Output"]._shape
+        return self.outputs["Output"].meta.shape
 
     @property
     def dtype(self):
-        return self.outputs["Output"]._dtype
+        return self.outputs["Output"].meta.dtype
 
 
 class OpMultiInputConcatenater(Operator):
     name = "OpMultiInputConcatenater"
     description = "Combine two or more MultiInput slots into a single MultiOutput slot"
 
-    Inputs = MultiInputSlot(level=2, optional=True)
-    Output = MultiOutputSlot(level=1)
+    Inputs = InputSlot(level=2, optional=True)
+    Output = OutputSlot(level=1)
 
     def __init__(self, *args, **kwargs):
         super(OpMultiInputConcatenater, self).__init__(*args, **kwargs)
@@ -571,18 +667,22 @@ class OpMultiInputConcatenater(Operator):
                 outputIndex += 1
 
 
-    def getSubOutSlot(self, slots, indexes, key, result):
+    def execute(self, slot, subindex, roi, result):
         # Should never be called.  All output slots are directly connected to an input slot.
         assert False
 
+    def propagateDirty(self, inputSlot, subindex, roi):
+        # Nothing to do here.
+        # All outputs are directly connected to an input slot.
+        pass
 
 class OpTransposeSlots(Operator):
     """
     Takes an input slot indexed as [i][j] and produces an output slot indexed as [j][i]
     Note: Only works for a slot of level 2.
     """
-    Inputs = MultiInputSlot(level=2)
-    Outputs = MultiOutputSlot(level=2)
+    Inputs = InputSlot(level=2)
+    Outputs = OutputSlot(level=2)
             
     def setupOutputs(self):
         minSize = None
@@ -598,10 +698,15 @@ class OpTransposeSlots(Operator):
             for i, oslot in enumerate( mslot ):
                 oslot.connect( self.Inputs[i][j] )
 
-    def getSubOutSlot(self, slots, indexes, key, result):
+    def execute(self, slot, subindex, roi, result):
         # Should never be called.  All output slots are directly connected to an input slot.
         assert False
 
+    def propagateDirty(self, inputSlot, subindex, roi):
+        # Nothing to do here.
+        # All outputs are directly connected to an input slot.
+        pass
+        
 
 
 
