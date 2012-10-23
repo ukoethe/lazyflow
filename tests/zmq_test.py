@@ -44,8 +44,6 @@ class OpA(Operator):
         a[:] = 1
         b[:] = 2
         
-        from bottle import static_file
-
         requests = []
         for i in range(request_count):
             req = Request(blubb, a = a, b = b, nr = i)
@@ -72,23 +70,28 @@ print result
 
 
 
-
+print "testing funcion call in cloud"
 req = Request(bribbel)
 req.submit_cloud()
 req.wait()
 
-
+print "testing function call in cloud (other module)"
 from zmq_test2 import brubbel
 req = Request(brubbel)
 req.submit_cloud()
 req.wait()
 
+print "testing function call in cloud (other module, alias import)"
 from zmq_test2 import brubbel as brub
 req = Request(brub)
 req.submit_cloud()
 req.wait()
 
-req = Request(brababbel)
-req.submit_cloud()
-req.wait()
+# print "testing nested function call"
+# try:
+#     req = Request(brababbel)
+#     req.submit_cloud()
+#     req.wait()
+# except Exception as e:
+#     print e
 
