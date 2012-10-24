@@ -132,11 +132,9 @@ class ZMQWorker(threading.Thread):
     
 
     def send_ready(self):
-        self._work_socket.send_pyobj("")
+        self._work_socket.send_pyobj("ready")
 
-
-
-    def run(self):
+    def setup_sockets(self):
         self._work_socket = zmq.Socket(self._ctx, zmq.REQ)
         self._work_socket.setsockopt(zmq.HWM,1)
         self._work_socket.connect(self._server + ":6666")
@@ -149,19 +147,39 @@ class ZMQWorker(threading.Thread):
         self._request_socket.setsockopt(zmq.HWM,1)
         self._request_socket.connect(self._server + ":6668")
 
+    def close_sockets(self):
+        self._work_socket.close(0)
+        self._notify_socket.close(0)
+        self._request_socket.close(0)
+        self._work_socket = zmq.Socket(self._ctx, zmq.REQ)
+        self._work_socket.setsockopt(zmq.HWM,1)
+        self._work_socket.connect(self._server + ":6666")
+
+
+    def run(self):
+        self.setup_sockets()
         while self._running:
-            self.send_ready()
             received = False
             count = 0
-            while self._running and received is False and count < self._timeout / 50:
+            while self._running and received is False:
+                try:
+                    self.send_ready()
+                except:
+                    # one message already waiting on output
+                    # self.close_sockets()
+                    # self.setup_sockets()
+                    # self.send_ready()
+                    pass
                 count += 1
-                events = self._work_socket.poll(50) # check every 50ms for thread stop
+                print self, " - waiting for work", time.time()
+                events = self._work_socket.poll(1000) # check every 50ms for thread stop
                 if events == zmq.POLLIN:
                     self._current_req = True
                     finished = False
 
-                    
+                    print self, " - receiving..."
                     self._current_req = req = self._work_socket.recv_pyobj()
+                    print self, " - done."
                     self._set_import_hook()
                     glob_dict = ZMQDict(globals(), self, req)
 
@@ -170,7 +188,7 @@ class ZMQWorker(threading.Thread):
                     # handle master stop
                     if req is None:
                         time.sleep(2)
-                        count = self._timeout / 50
+                        count = 0
                         break
 
                     self.send_ack(req)
@@ -208,16 +226,10 @@ class ZMQWorker(threading.Thread):
                     self._current_req = None
                     count = 0
             
-            if count >= self._timeout / 50:
-                count = 0
-                self._work_socket.close(0)
-                self._work_socket = zmq.Socket(self._ctx, zmq.REQ)
-                self._work_socket.setsockopt(zmq.HWM,1)
-                self._work_socket.connect(self._server + ":6666")
     
     
     def resolve_name(self, reqid, name):
-        print "Resolving ", name
+        print self, " - Resolving ", name
         self._request_socket.send_pyobj({
             "type" : "get_name",
             "id" : reqid,
@@ -228,15 +240,15 @@ class ZMQWorker(threading.Thread):
 
         if answer["type"] == "import":
             result = __import__(name)
-            print "   received import"
+            print self, " -   received import"
         elif answer["type"] == "something":
             result = pickle.loads(answer["object"])
-            print "   received ",type(result)
+            print self, " -    received ",type(result)
         return result
 
 
     def get_import(self, name, globals, locals, fromlist):
-        print "WORKER: fetching %s from server" % name
+        print self, " - fetching %s from server" % name
         self._request_socket.send_pyobj({
             "type" : "import",
             "name" : name, 
@@ -253,7 +265,7 @@ class ZMQWorker(threading.Thread):
             else:
                 fdir = inc_dir + "/" + string.join(string.split(mod[0],".")[:-1], "/")
 
-            print "      writing", fdir + fname
+            print self, " -      writing", fdir + fname
             if not os.path.exists(fdir):
                 os.makedirs(fdir)
             f = open(fdir + fname, "w")

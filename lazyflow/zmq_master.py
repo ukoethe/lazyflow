@@ -10,7 +10,7 @@ import __builtin__
 
 
 class ZMQMasterWork(threading.Thread):
-    def __init__(self, threadpool, freeworker_timeout = 10000):
+    def __init__(self, threadpool, freeworker_timeout = 1000):
         threading.Thread.__init__(self)
         self.daemon = True
         self._threadpool = threadpool
@@ -42,19 +42,21 @@ class ZMQMasterWork(threading.Thread):
             events = self._work_socket.poll(self._timeout) 
             if events == zmq.POLLIN:
                 token = self._work_socket.recv_pyobj()
+                assert token == "ready", token
                 self._requests[id(request)] = request
+                print "found free worker -> sending request"
                 self._work_socket.send_pyobj({ 'id': id(request), 'function' : dump_func_to_string(request.function), 'kwargs': request.kwargs})
                 self._watchdog.watch(request) # add request to watchdog
                 found_worker = True
             else:
                 # if no free worker is found within timeout, reset connection
                 print "No free worker - resetting"
-                self._work_socket.close(-1)
+                self._work_socket.close(0)
                 self._zmq_ctx.term()
                 self._zmq_ctx = zmq.Context()
                 self._work_socket = zmq.Socket(self._zmq_ctx, zmq.REP)
-                self._work_socket.bind("tcp://*:6666")
                 self._work_socket.setsockopt(zmq.HWM,1)
+                self._work_socket.bind("tcp://*:6666")
 
 
     def run(self):
@@ -98,7 +100,7 @@ class ZMQWatchDog(threading.Thread):
         self._running = True
         self._unacknowledged = {}
         self._lock = threading.Lock()
-        self._timout = ack_timout / 1000.0
+        self._timout = 10
 
 
     def watch(self, req):

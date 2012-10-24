@@ -6,6 +6,7 @@ import numpy as np
 import numpy as numpy
 import random
 import time
+import vigra
 request_count = 10
 
 def bribbel():
@@ -14,6 +15,12 @@ def bribbel():
 
 def brababbel():
     bribbel()
+
+
+def brubbel(a):
+    l = vigra.analysis.labelVolumeWithBackground(a)
+    print "labeled the cool image"
+    return l
 
 class OpA(Operator):
     out = OutputSlot()
@@ -74,6 +81,13 @@ print "testing funcion call in cloud"
 req = Request(bribbel)
 req.submit_cloud()
 req.wait()
+
+print "testing funcion call in cloud with vigra call"
+req = Request(brubbel, a = numpy.random.rand(300,200,300).astype(numpy.float32))
+req.submit_cloud()
+res = req.wait()
+print "finished"
+print res
 
 print "testing function call in cloud (other module)"
 from zmq_test2 import brubbel
