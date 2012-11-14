@@ -186,16 +186,15 @@ class SubRegion(Roi):
         return self
 
     def adjustChannel(self,cPerC,cIndex,channelRes):
+        self.start = TinyVector(self.start)
+        self.stop = TinyVector(self.stop)
         if cPerC != 1 and channelRes == 1:
-            start = [self.start[i]/cPerC if i == cIndex else self.start[i] for i in range(len(self.start))]
-            stop = [self.stop[i]/cPerC+1 if i==cIndex else self.stop[i] for i in range(len(self.stop))]
-            self.start = TinyVector(start)
-            self.stop = TinyVector(stop)
+            self.start[cIndex] /= cPerC
+            self.stop[cIndex] /= cPerC
+            self.stop[cIndex] += 1
         elif channelRes > 1:
-            start = [0 if i == cIndex else self.start[i] for i in range(len(self.start))]
-            stop = [channelRes if i==cIndex else self.stop[i] for i in range(len(self.stop))]
-            self.start = TinyVector(start)
-            self.stop = TinyVector(stop)
+            self.start[cIndex] = 0            
+            self.stop[cIndex] = channelRes
         return self
 
     def toSlice(self, hardBind = False):
