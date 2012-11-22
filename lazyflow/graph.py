@@ -235,7 +235,7 @@ class Slot(object):
         self._defaultValue = value    # a InputSlot can
         self._backpropagate_values = False # Causes calls to setValue to be propagated backwards to the partner slot.  Used by the OperatorWrapper.
         self.rtype = rtype            # the region of interest type of the slot ( rtype.py)
-        self.meta = MetaDict()        # the MetaDict that holds the slots meta information
+        self._meta = MetaDict()        # the MetaDict that holds the slots meta information
         self._subSlots = []           # if level > 0, this holds the sub-Input/Output slots
         self._stypeType = stype       # the slot type class
         self.stype = stype(self)      # the slot type instance
@@ -252,6 +252,7 @@ class Slot(object):
         self._sig_removed = OrderedSignal()
         self._sig_inserted = OrderedSignal()
         self._sig_access_index = OrderedSignal()
+        self._sig_access_meta = OrderedSignal()
         
         self._resizing = False
         
@@ -266,6 +267,15 @@ class Slot(object):
     #  A p i    M e t h o d s
     #
     #
+    
+    @property
+    def meta(self):
+        # forward .meta access to partner
+        if self.partner is not None:
+            return self.partner.meta
+        else:
+            self._sig_access_meta(self)
+            return self._meta
 
 
     def notifyDirty(self, function, **kwargs):
@@ -375,6 +385,15 @@ class Slot(object):
         the keyword arguments follow
         """
         self._sig_access_index.subscribe(function, **kwargs)
+    
+    def notifyAccessMeta(self, function, **kwargs):
+        """
+        calls the corresponding function before the meta attribute is returned
+        first argument of the function is this slot
+        the keyword arguments follow
+        """
+        self._sig_access_meta.subscribe(function, **kwargs)
+
 
     def unregisterDirty(self, function):
         """
@@ -447,6 +466,13 @@ class Slot(object):
         unregister a inserted callback
         """
         self._sig_access_index.unsubscribe(function)
+    
+    def unregisterAccessMeta(self, function):
+        """
+        unregister a inserted callback
+        """
+        self._sig_access_meta.unsubscribe(function)
+
 
     def connect(self,partner, notify = True):
         """
@@ -468,8 +494,8 @@ class Slot(object):
             self._value = None
             if partner.level == self.level:
                 self.partner = partner
-                notifyReady = self.partner.meta._ready and not self.meta._ready
-                self.meta = self.partner.meta.copy()
+                notifyReady = self.partner._meta._ready and not self._meta._ready
+                self._meta = self.partner._meta.copy()
 
                 # the slot with more sub-slots determines
                 # the number of subslots
@@ -498,8 +524,8 @@ class Slot(object):
 
             elif partner.level < self.level:
                 self.partner = partner
-                notifyReady = self.partner.meta._ready and not self.meta._ready
-                self.meta = self.partner.meta.copy()
+                notifyReady = self.partner._meta._ready and not self._meta._ready
+                self._meta = self.partner._meta.copy()
                 for i, slot in enumerate(self._subSlots):
                     slot.connect(partner)
 
@@ -539,8 +565,8 @@ class Slot(object):
                 pass
         self.partner = None
         self._value = None
-        oldReady = self.meta._ready 
-        self.meta = MetaDict()
+        oldReady = self._meta._ready 
+        self._meta = MetaDict()
 
         if len(self._subSlots) > 0:
             self.resize(0)
@@ -651,6 +677,8 @@ class Slot(object):
 
         # call after-remove callbacks
         self._sig_removed(self, position, finalsize)
+        return slot
+
 
     def get( self, roi, destination = None ):
         """
@@ -791,9 +819,9 @@ class Slot(object):
             self._sig_access_index(self, key)
             return self._subSlots[key]
         else:
-            if self.meta.shape is None:
+            if self._meta.shape is None:
                 assert self.ready(), "This slot ({}.{}) isn't ready yet, which means you can't ask for its data.  Is it connected?".format(self.getRealOperator().name, self.name)
-                assert self.meta.shape is not None, "Can't ask for slices of this slot yet: self.meta.shape is None !!! (operator %r [self=%r] slot: %s, key=%r" % (self.operator.name, self.operator, self.name, key)
+                assert self._meta.shape is not None, "Can't ask for slices of this slot yet: self._meta.shape is None !!! (operator %r [self=%r] slot: %s, key=%r" % (self.operator.name, self.operator, self.name, key)
             return self(pslice=key)
 
 
@@ -834,7 +862,7 @@ class Slot(object):
         In the case of a MultiSlot this returns the number of subslots, i.e. the length of the list
         """
         return len(self._subSlots)
-
+    
 
     @property
     def value(self):
@@ -900,13 +928,13 @@ class Slot(object):
             self._sig_disconnect(self)
             self._value = value
             self.stype.setupMetaForValue(value)
-            self.meta._dirty = True
+            self._meta._dirty = True
 
             for s in self._subSlots:
                 s.setValue(self._value)
 
-            notify = (self.meta._ready == False)
-            self.meta._ready = True # a slot with a value is always ready
+            notify = (self._meta._ready == False)
+            self._meta._ready = True # a slot with a value is always ready
             if notify:
                 self._sig_ready(self)
 
@@ -966,7 +994,7 @@ class Slot(object):
     def ready(self):
         if self.level == 0:
             # If this slot is non-multi, then just check our own status
-            ready = self.meta._ready
+            ready = self._meta._ready
         else:
             # If this slot is multi, check all of our subslots
             # (If we have no subslots, then we are NOT ready.)
@@ -982,10 +1010,10 @@ class Slot(object):
         for p in self._subSlots:
             p._setReady()        
 
-        self.meta._ready = (self.level == 0) or (len(self._subSlots) > 0)
+        self._meta._ready = (self.level == 0) or (len(self._subSlots) > 0)
         
         # If we just became ready...
-        if not wasReady and self.meta._ready:
+        if not wasReady and self._meta._ready:
             # Notify partners of changed readystatus
             self._changed()
             self._sig_ready(self)
@@ -1028,26 +1056,26 @@ class Slot(object):
         return s
 
     def _changed(self):
-        oldMeta = self.meta
-        if self.partner is not None and self.meta != self.partner.meta:
-            self.meta = self.partner.meta.copy()
+        oldMeta = self._meta
+        if self.partner is not None and self._meta != self.partner._meta:
+            self._meta = self.partner._meta.copy()
 
         if self._type == "output":
             for o in self._subSlots:
                 o._changed()
 
         # Notify readiness after subslots are updated
-        if self.meta._ready != oldMeta._ready:
-            if self.meta._ready:
+        if self._meta._ready != oldMeta._ready:
+            if self._meta._ready:
                 self._sig_ready(self)
             else:
                 self._sig_unready(self)
 
-        wasdirty = self.meta._dirty
-        if self.meta._dirty:
+        wasdirty = self._meta._dirty
+        if self._meta._dirty:
             for c in self.partners:
                 c._changed()
-            self.meta._dirty = False
+            self._meta._dirty = False
 
         if self._type != "output":
             self._configureOperator(self)
@@ -1139,27 +1167,27 @@ class Slot(object):
     #
     
     def setShapeAtAxisTo(self,axis,size):
-        tmpshape = list(self.meta.shape)
-        tmpshape[self.meta.axistags.index(axis)] = size
-        self.meta.shape = tuple(tmpshape)
+        tmpshape = list(self._meta.shape)
+        tmpshape[self._meta.axistags.index(axis)] = size
+        self._meta.shape = tuple(tmpshape)
 
     def __str__(self):
-        if self.meta.axistags is None:
+        if self._meta.axistags is None:
             axisStr = 'Axistags \tNone\n'
         else:
-            axisStr = str(self.meta.axistags)
-        return self.name + '\n' + 'Shape \t\t'+str(self.meta.shape) +'\n'\
+            axisStr = str(self._meta.axistags)
+        return self.name + '\n' + 'Shape \t\t'+str(self._meta.shape) +'\n'\
                 +axisStr +\
-               'Dtype \t\t' + str(self.meta.dtype)
+               'Dtype \t\t' + str(self._meta.dtype)
 
     def __repr__(self):
-        if self.meta.axistags is None:
+        if self._meta.axistags is None:
             axisStr = 'Axistags \tNone\n'
         else:
-            axisStr = str(self.meta.axistags)
-        return self.name + '\n' + 'Shape \t\t'+str(self.meta.shape) +'\n'\
+            axisStr = str(self._meta.axistags)
+        return self.name + '\n' + 'Shape \t\t'+str(self._meta.shape) +'\n'\
                 + axisStr +\
-               'Dtype \t\t' + str(self.meta.dtype)
+               'Dtype \t\t' + str(self._meta.dtype)
 
 class InputSlot(Slot):
     """
@@ -1513,7 +1541,7 @@ class Operator(object):
                 # Save a copy of the ready flag for each output slot so we can decide whether or not to fire the ready signal.
                 readyFlags = {}
                 for k, oslot in self.outputs.items():
-                    readyFlags[k] = oslot.meta._ready
+                    readyFlags[k] = oslot._meta._ready
                 
                 # Call the subclass
                 self.setupOutputs()
@@ -1541,15 +1569,15 @@ class Operator(object):
             # Keep track of the old ready statuses so we know if something changed
             readyFlags = {}
             for k, oslot in self.outputs.items():
-                readyFlags[k] = oslot.meta._ready
+                readyFlags[k] = oslot._meta._ready
     
             # All unconnected outputs are no longer ready
             for oslot in self.outputs.values():
-                oslot.meta._ready &= ( oslot.partner is not None )
+                oslot._meta._ready &= ( oslot.partner is not None )
                 
             # If the ready status changed, signal it.
             for k, oslot in self.outputs.items():
-                if readyFlags[k] != oslot.meta._ready:
+                if readyFlags[k] != oslot._meta._ready:
                     oslot._sig_unready(self)
                     oslot._changed()
 
@@ -1561,7 +1589,7 @@ class Operator(object):
         a default value defined.
 
         In this method the operator developer should stup
-        the .meta information of the outputslots.
+        the ._meta information of the outputslots.
 
         The default implementation emulates the old api behaviour.
         """
@@ -1683,6 +1711,7 @@ class OperatorWrapper(Operator):
 
         self._length = 0
 
+
     @property
     def name(self):
         return self._name
@@ -1710,6 +1739,9 @@ class OperatorWrapper(Operator):
 
     def _callbackAccessIndex(self, slot, index):
         self._ensureInnerOperator(index)
+    
+    def _callbackAccessMeta(self, slot, index):
+        self._ensureInnerOperator(index)
 
     def propagateDirty(self, slot, subindex, roi):
         # Nothing to do: All inputs are directly connected to internal operators.
@@ -1728,23 +1760,52 @@ class OperatorWrapper(Operator):
                 newInner[k] = o
             self.innerOperators = newInner
 
-            
+            in_set = set()
+            out_set = set()
+
             for key,outerSlot in self.inputs.items():
                 # Only connect to a subslot if it was promoted during wrapping
                 if outerSlot.name in self.promotedSlotNames:
-                    outerSlot.insertSlot(index, length)
-    
+                    slot = outerSlot.insertSlot(index, length)
+                    in_set.add(slot)
+                else:
+                    in_set.add(outerSlot)
+            
             for key,mslot in self.outputs.items():
-                mslot.insertSlot(index, length)
-            print "KJSDKSDJLSKDJLK"
-            self._ensureInnerOperator(index)
+                slot = mslot.insertSlot(index, length)
+                out_set.add(slot)
+                slot.notifyAccessMeta(self._callbackAccessMeta, index = index)
 
+            ready = []
+
+            #connect to ready unready and meta access signals
+            for slot in in_set:
+                    slot.notifyReady(self._callbackReady, in_set = in_set, out_set = out_set, index = index)
+                    slot.notifyUnready(self._callbackUnready, in_set = in_set, out_set = out_set, index = index)
+                    if slot.ready():
+                        ready.append(slot)
+
+            for slot in ready:
+               self._callbackReady(slot, in_set, out_set, index)
+    
+
+    def _callbackReady(self, slot, in_set, out_set, index):
+        in_set.remove(slot)
+        if len(in_set) == 0:
+            # self._ensureInnerOperator(index)
+            for s in out_set:
+                s._meta._ready = True
+
+    def _callbackUnready(self, slot, in_set, out_set, index):
+        in_set.add(slot)
+        for s in out_set:
+            s._meta._ready = False
 
     def _ensureInnerOperator(self, index):
         with Tracer(self.traceLogger, msg=self.name):
             if self.innerOperators.has_key(index):
-                print self.innerOperators[index]
                 return
+            print "ENSURE INNER OPERATOR", index
             op = self._createInnerOperator()
             
             # Update our name (if the client didn't already give us a special one)
@@ -1770,6 +1831,7 @@ class OperatorWrapper(Operator):
     
             for key,mslot in self.outputs.items():
                 mslot[index].connect(op.outputs[key])
+                mslot[index]._changed()
 
     def handleEarlyDisconnect(self, slot):
         assert False, "You aren't allowed to disconnect the internal connections of an operator wrapper."
@@ -1780,13 +1842,24 @@ class OperatorWrapper(Operator):
                 return
             self._length -= 1
     
+    
+            for oslot in self.outputs.values():
+                slot = oslot.removeSlot(index, length)
+                if slot:
+                    slot.unregisterAccessMeta(self._callbackAccessMeta)
+    
+            for islot in self.inputs.values():
+                slot = islot.removeSlot(index, length)
+                if slot:
+                    slot.unregisterReady(self._callbackReady)
+                    slot.unregisterUnready(self._callbackUnready)
+            
             if self.innerOperators.has_key(index):
                 op = self.innerOperators.pop(index)
                 for slot in op.inputs.values():
                     slot.backpropagate_values = False
                     slot.unregisterDisconnect( self.handleEarlyDisconnect )
-            else:
-                op = None
+                op.cleanUp()
 
             newInner = dict()
             for k, o in self.innerOperators.items():
@@ -1798,14 +1871,6 @@ class OperatorWrapper(Operator):
             self.innerOperators = newInner
 
     
-            for oslot in self.outputs.values():
-                oslot.removeSlot(index, length)
-    
-            for islot in self.inputs.values():
-                islot.removeSlot(index, length)
-    
-            if op != None:
-                op.cleanUp()
 
     def _setupOutputs(self):
         with Tracer(self.traceLogger, msg=self.name):
