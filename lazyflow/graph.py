@@ -251,6 +251,7 @@ class Slot(object):
         self._sig_remove = OrderedSignal()
         self._sig_removed = OrderedSignal()
         self._sig_inserted = OrderedSignal()
+        self._sig_access_index = OrderedSignal()
         
         self._resizing = False
         
@@ -366,6 +367,14 @@ class Slot(object):
         """
         self._sig_inserted.subscribe(function, **kwargs)
 
+    def notifyAccessIndex(self, function, **kwargs):
+        """
+        calls the corresponding function before a subslot is accessed
+        first argument of the function is this slot
+        second argument is the index
+        the keyword arguments follow
+        """
+        self._sig_access_index.subscribe(function, **kwargs)
 
     def unregisterDirty(self, function):
         """
@@ -432,6 +441,12 @@ class Slot(object):
         unregister a inserted callback
         """
         self._sig_inserted.unsubscribe(function)
+        
+    def unregisterAccessIndex(self, function):
+        """
+        unregister a inserted callback
+        """
+        self._sig_access_index.unsubscribe(function)
 
     def connect(self,partner, notify = True):
         """
@@ -594,7 +609,7 @@ class Slot(object):
         finalsize indicates the final destination size
         """
         if len(self) >= finalsize:
-            return self[position]
+            return self._subSlots[position]
         slot =  self._insertNew(position)
         self.logger.debug("Inserting slot %r into slot %r of operator %r to size %r" % (position, self.name, self.operator.name, finalsize))
         if propagate:
@@ -768,10 +783,12 @@ class Slot(object):
             if isinstance(key, tuple):
                 assert len(key) > 0
                 assert len(key) <= self.level
+                self._sig_access_index(self, key[0])
                 if len(key) == 1:
                     return self._subSlots[key[0]]
                 else:
                     return self._subSlots[key[0]][key[1:]]
+            self._sig_access_index(self, key)
             return self._subSlots[key]
         else:
             if self.meta.shape is None:
@@ -1082,7 +1099,7 @@ class Slot(object):
         if self.partner is not None:
             if self.partner.level == self.level:
                 if len(self.partner) > index:
-                    slot.connect(self.partner[index])
+                    slot.connect(self.partner._subSlots[index])
             else:
                 slot.connect(self.partner)
         if self._value is not None:
@@ -1623,7 +1640,7 @@ class OperatorWrapper(Operator):
 
         self.promotedSlotNames = promotedSlotNames
 
-        self.innerOperators = []
+        self.innerOperators = dict()
         if lazyflow.verboseWrapping:
             msgLevel = logging.INFO
         else:
@@ -1656,12 +1673,15 @@ class OperatorWrapper(Operator):
         # register callbacks for inserted and removed output subslots
         for s in self.outputs.values():
             s.notifyInserted(self._callbackInserted)
+            s.notifyAccessIndex(self._callbackAccessIndex)
             s.notifyRemoved(self._callbackRemove)
 
         for s in self.inputs.values():
             assert len(s) == 0
         for s in self.outputs.values():
             assert len(s) == 0
+
+        self._length = 0
 
     @property
     def name(self):
@@ -1673,11 +1693,12 @@ class OperatorWrapper(Operator):
         self._customName = True
 
     def __getitem__(self, key):
+        self._ensureInnerOperator(key)
         return self.innerOperators[key]
 
     def _callbackInserted(self, slot, index, size):
         with Tracer(self.traceLogger, msg=self.name):
-            self._insertInnerOperator(index, size)
+            self._insertSlots(index, size)
 
     def _callbackRemove(self, slot, index, size):
         with Tracer(self.traceLogger, msg=self.name):
@@ -1685,61 +1706,97 @@ class OperatorWrapper(Operator):
 
     def _callbackConnect(self, slot):
         with Tracer(self.traceLogger, msg=self.name):
-            slot.resize(len(self.innerOperators))
-            for index, innerOp in enumerate(self.innerOperators):
-                innerOp.inputs[slot.name].connect(slot[index])
+            slot.resize(self._length)
+
+    def _callbackAccessIndex(self, slot, index):
+        self._ensureInnerOperator(index)
 
     def propagateDirty(self, slot, subindex, roi):
         # Nothing to do: All inputs are directly connected to internal operators.
         pass
-
-    def _insertInnerOperator(self, index, length):
+    
+    def _insertSlots(self, index, length):
         with Tracer(self.traceLogger, msg=self.name):
-            if len(self.innerOperators) >= length:
-                return self.innerOperators[index]
+            if self._length >= length:
+                return
+            self._length += 1
+            
+            newInner = dict()
+            for k, o in self.innerOperators.items():
+                if k >= index:
+                    k += 1
+                newInner[k] = o
+            self.innerOperators = newInner
+
+            
+            for key,outerSlot in self.inputs.items():
+                # Only connect to a subslot if it was promoted during wrapping
+                if outerSlot.name in self.promotedSlotNames:
+                    outerSlot.insertSlot(index, length)
+    
+            for key,mslot in self.outputs.items():
+                mslot.insertSlot(index, length)
+            print "KJSDKSDJLSKDJLK"
+            self._ensureInnerOperator(index)
+
+
+    def _ensureInnerOperator(self, index):
+        with Tracer(self.traceLogger, msg=self.name):
+            if self.innerOperators.has_key(index):
+                print self.innerOperators[index]
+                return
             op = self._createInnerOperator()
             
             # Update our name (if the client didn't already give us a special one)
             if self._customName is False:
                 self._name = "Wrapped " + op.name
-
+            
+            self.innerOperators[index] = op
+    
             # If anyone calls setValue() on one of these slots, forward the setValue 
             #  call to the slot's partner (the outer slot on the operator wrapper)
             for slot in op.inputs.values():
                 slot.backpropagate_values = True
                 slot.notifyDisconnect( self.handleEarlyDisconnect )
-            
-            self.innerOperators.insert(index, op)
-    
+
             # Connect the inner operator's inputs to our outer input slots
             for key,outerSlot in self.inputs.items():
                 # Only connect to a subslot if it was promoted during wrapping
                 if outerSlot.name in self.promotedSlotNames:
-                    outerSlot.insertSlot(index, length)
                     partner = outerSlot[index]
                 else:
                     partner = outerSlot
                 op.inputs[key].connect(partner)
     
             for key,mslot in self.outputs.items():
-                mslot.insertSlot(index, length)
                 mslot[index].connect(op.outputs[key])
-                #mslot[index]._changed()
-            return op
 
     def handleEarlyDisconnect(self, slot):
         assert False, "You aren't allowed to disconnect the internal connections of an operator wrapper."
 
     def _removeInnerOperator(self, index, length):
         with Tracer(self.traceLogger, msg=self.name):
-            if len(self.innerOperators) <= length:
+            if self._length <= length:
                 return
-            assert index < len(self.innerOperators)
+            self._length -= 1
     
-            op = self.innerOperators.pop(index)
-            for slot in op.inputs.values():
-                slot.backpropagate_values = False
-                slot.unregisterDisconnect( self.handleEarlyDisconnect )
+            if self.innerOperators.has_key(index):
+                op = self.innerOperators.pop(index)
+                for slot in op.inputs.values():
+                    slot.backpropagate_values = False
+                    slot.unregisterDisconnect( self.handleEarlyDisconnect )
+            else:
+                op = None
+
+            newInner = dict()
+            for k, o in self.innerOperators.items():
+                if k > index:
+                    k -= 1
+                    newInner[k] = o
+                elif k != index:
+                    newInner[k] = o
+            self.innerOperators = newInner
+
     
             for oslot in self.outputs.values():
                 oslot.removeSlot(index, length)
@@ -1747,8 +1804,8 @@ class OperatorWrapper(Operator):
             for islot in self.inputs.values():
                 islot.removeSlot(index, length)
     
-            op.cleanUp()
-            length = len(self.innerOperators)
+            if op != None:
+                op.cleanUp()
 
     def _setupOutputs(self):
         with Tracer(self.traceLogger, msg=self.name):
