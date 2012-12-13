@@ -508,7 +508,6 @@ class Slot(object):
         """
         if self.backpropagate_values:
             if self.partner is not None:
-                assert self.partner._type == "input"
                 self.partner.disconnect()
             return
 
@@ -548,6 +547,8 @@ class Slot(object):
         Arguments:
           size    : the desired number of subslots
         """
+        assert isinstance(size, int)
+
         if self._resizing:
             return
         if self.level == 0:
@@ -1229,10 +1230,18 @@ from abc import ABCMeta
 class OperatorMetaClass(ABCMeta):
 
     def __new__(cls,name,bases,classDict):
-        cls = ABCMeta.__new__(cls,name,bases,classDict)
+        cls = super(OperatorMetaClass, cls).__new__(cls,name,bases,classDict)
 
         setattr(cls,"inputSlots", list(cls.inputSlots))
         setattr(cls,"outputSlots", list(cls.outputSlots))
+
+        # Support fancy syntax.
+        # If the user typed this in his class definition:
+        #    MySlot = InputSlot()
+        #    MySlot2 = InputSlot()
+        #
+        # Make it equivalent to this:
+        #    inputSlots = [ InputSlot("MySlot"), InputSlot("MySlot2") ]
 
         for k,v in cls.__dict__.items():
             if isinstance(v,InputSlot, ):
@@ -1335,6 +1344,11 @@ class Operator(object):
         self._settingUp = False
 
         self._instantiate_slots()
+        
+        # We normally assert if an operator's upstream partners are yanked away.
+        # If operator is marked as "externally_managed", then we'll avoid the assert.
+        # In that case, it's assumed that you know what you're doing, and you weren't planning to use that operator, anyway.
+        self.externally_managed = False
 
     @property
     def children(self):
@@ -1449,7 +1463,9 @@ class Operator(object):
         self._disconnect()
 
         for s in self.inputs.values() + self.outputs.values():
-            if len(s.partners) > 0:
+            # See note about the externally_managed flag in Operator.__init__
+            partners = filter( lambda p: p.getRealOperator() is not None and not p.getRealOperator().externally_managed, s.partners )
+            if len(partners) > 0:
                 msg = "Cannot clean up this operator: Slot '{}' is still providing data to downstream operators!\n".format(s.name)
                 for i,p in enumerate(s.partners):
                     msg += "Downstream Partner {}: {}.{}".format(i, p.getRealOperator().name, p.name)
@@ -1592,7 +1608,7 @@ class OperatorWrapper(Operator):
     logger = logging.getLogger(loggerName)
     traceLogger = logging.getLogger('TRACE.' + loggerName)
 
-    def __init__(self, operatorClass, operator_args=None, operator_kwargs=None, parent=None, graph=None, promotedSlotNames = None):
+    def __init__(self, operatorClass, operator_args=None, operator_kwargs=None, parent=None, graph=None, promotedSlotNames = None, broadcastingSlotNames = None):
         """
         Constructs a wrapper for the given operator.
         That is, manages a list of copies of the original operator, and provides access to these inner operators' slots via external multislots.
@@ -1626,11 +1642,19 @@ class OperatorWrapper(Operator):
         
         self._customName = False
 
-        if promotedSlotNames is None:
+        if promotedSlotNames is not None:
+            assert broadcastingSlotNames is None, "Please specify either the promoted slots or the broadcasting slots, not both."
+            # 'Promoted' slots will be exposed as multi-slots
+            # All others will be broadcasted
+            promotedSlotNames = set(promotedSlotNames)
+        elif broadcastingSlotNames is not None:
+            # 'Broadcasting' slots are NOT exposed as multi-slots.
+            # Each is exposed as a single slot that is shared by all inner operators.
+            allInputSlotNames = set( map( lambda s: s.name, operatorClass.inputSlots ) )        
+            promotedSlotNames = allInputSlotNames - set(broadcastingSlotNames) # set difference
+        else:
             # No slots specified: All original slots are promoted by default
             promotedSlotNames = set(slot.name for slot in operatorClass.inputSlots)
-        else:
-            promotedSlotNames = set(promotedSlotNames)
 
         # All Outputs are always promoted
         promotedSlotNames |= set(slot.name for slot in operatorClass.outputSlots)
@@ -1733,11 +1757,17 @@ class OperatorWrapper(Operator):
                     partner = outerSlot[index]
                 else:
                     partner = outerSlot
+                if op.inputs[key].partner is not None:
+                    msg = "Can't set up OperatorWrapper connections. Input slot {} is already connected to a partner (must have happened in {}'s constructor".format( key, op.name )
+                    raise RuntimeError(msg)
                 op.inputs[key].connect(partner)
-    
+
+            # Connect our outer output slots to the inner operator's output slots.
             for key,mslot in self.outputs.items():
                 mslot.insertSlot(index, length)
+                mslot[index].backpropagate_values = True
                 mslot[index].connect(op.outputs[key])
+                mslot[index].notifyDisconnect( self.handleEarlyDisconnect )
                 #mslot[index]._changed()
             return op
 
@@ -1750,11 +1780,16 @@ class OperatorWrapper(Operator):
                 return
             assert index < len(self.innerOperators)
     
+            for key,mslot in self.outputs.items():
+                if len(mslot) > length:
+                    mslot[index].backpropagate_values = False
+                    mslot[index].unregisterDisconnect( self.handleEarlyDisconnect )
+    
             op = self.innerOperators.pop(index)
             for slot in op.inputs.values():
                 slot.backpropagate_values = False
                 slot.unregisterDisconnect( self.handleEarlyDisconnect )
-    
+
             for oslot in self.outputs.values():
                 oslot.removeSlot(index, length)
     

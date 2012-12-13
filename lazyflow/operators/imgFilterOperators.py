@@ -9,6 +9,7 @@ from math import sqrt
 from functools import partial
 from lazyflow.roi import roiToSlice,sliceToRoi
 import collections
+import warnings
 
 class OpBaseVigraFilter(Operator):
     
@@ -88,7 +89,6 @@ class OpBaseVigraFilter(Operator):
         source = self.Input(roi.start,roi.stop).wait()
         source = vigra.VigraArray(source,axistags=axistags)
         
-        
         #set up the grid for the iterator, and the iterator
         srcGrid = [source.shape[i] if i!= channelIndex else channelRes for i in range(len(source.shape))]
         trgtGrid = [inputShape[i]  if i != channelIndex else self.channelsPerChannel() for i in range(len(source.shape))]
@@ -110,6 +110,7 @@ class OpBaseVigraFilter(Operator):
         
         #iterate over the requested volumes
         
+        warnings.warn("TODO: This loop could be parallelized for better performance.")
         for src,trgt,mask in nIt:
             result[trgt] = self.vigraFilter(source = source[src],window_size=self.windowSize,roi=origRoi)[mask]
         return result
@@ -214,12 +215,12 @@ class OpLaplacianOfGaussian(OpBaseVigraFilter):
     def channelsPerChannel(self):
         return 1
 
-class OpStructureTensorEigenvalues(OpBaseVigraFilter):
+class OpStructureTensorEigenvaluesSummedChannels(OpBaseVigraFilter):
     inputSlots = [InputSlot("Input"), InputSlot("Sigma", stype = "float"),InputSlot("Sigma2", stype = "float")]
     name = "StructureTensorEigenvalues"
     
     def __init__(self, *args, **kwargs):
-        super(OpStructureTensorEigenvalues, self).__init__(*args, **kwargs)
+        super(OpStructureTensorEigenvaluesSummedChannels, self).__init__(*args, **kwargs)
     
     def getChannelResolution(self):
         return self.Input.meta.shape[self.Input.meta.axistags.channelIndex]
@@ -250,6 +251,40 @@ class OpStructureTensorEigenvalues(OpBaseVigraFilter):
     def channelsPerChannel(self):
         return self.Input.meta.axistags.axisTypeCount(vigra.AxisType.Space)
     
+class OpStructureTensorEigenvalues(OpBaseVigraFilter):
+    inputSlots = [InputSlot("Input"), InputSlot("Sigma", stype = "float"),InputSlot("Sigma2", stype = "float")]
+    name = "StructureTensorEigenvalues"
+    
+    def __init__(self, *args, **kwargs):
+        super(OpStructureTensorEigenvalues, self).__init__(*args, **kwargs)
+    
+    def calculateHalo(self, sigma):
+        sigma1 = self.Sigma.value
+        sigma2 = self.Sigma2.value
+        return int(numpy.ceil(sigma1*self.windowSize))+int(numpy.ceil(sigma2*self.windowSize))
+        
+    def setupFilter(self):
+        innerScale = self.Sigma.value
+        outerScale = self.inputs["Sigma2"].value
+        
+        def tmpFilter(source,innerScale,outerScale,window_size,roi):
+            tmpfilter = vigra.filters.structureTensorEigenvalues
+            return tmpfilter(image=source,innerScale=innerScale,outerScale=outerScale,window_size=window_size,roi=(roi.start,roi.stop))
+
+        self.vigraFilter = partial(tmpFilter,innerScale=innerScale,outerScale=outerScale,window_size=self.windowSize)
+
+        return max(innerScale,outerScale)
+    
+    def setupIterator(self, source, result):
+        self.iterator = AxisIterator(source,'spatial',result,'spatial',[(),({'c':self.channelsPerChannel()})])   
+        
+    def resultingChannels(self):
+        return self.Input.meta.axistags.axisTypeCount(vigra.AxisType.Space)*self.Input.meta.shape[self.Input.meta.axistags.channelIndex]
+    
+    def channelsPerChannel(self):
+        return self.Input.meta.axistags.axisTypeCount(vigra.AxisType.Space)
+
+
 class OpHessianOfGaussianEigenvalues(OpBaseVigraFilter):
     inputSlots = [InputSlot("Input"), InputSlot("Sigma", stype = "float")]
     name = "HessianOfGaussianEigenvalues"
@@ -392,13 +427,16 @@ class OpPixelFeaturesPresmoothed(Operator):
         featureCount = 0
         self.featureOutputChannels = []
         k=0
+
+        totalFeatureCount = (self.inMatrix == True).sum()
+        self.Features.resize( totalFeatureCount )
+
         for i in xrange(len(self.inMatrix)): #Cycle through operators == i
             for j in xrange(len(self.inMatrix[i])): #Cycle through sigmas == j
                 if self.inMatrix[i][j]:
                     self.operatorMatrix[i][j] = self.FeatureInfos[self.features[i]][0](graph=self.graph)
                     self.operatorMatrix[i][j].Input.connect(self.Input)
                     self.operatorMatrix[i][j].Sigma.setValue(self.inScales[i])
-                    self.operatorMatrix[i][j].Output.meta.description = self.FeatureInfos[self.features[i]][2].format(self.inScales[j])
                     if self.FeatureInfos[self.features[i]][1]:
                         self.operatorMatrix[i][j].Sigma2.setValue(self.inScales[i]*self.FeatureInfos[self.features[i]][1])
                     self.multi.inputs["Input%02d"%(k)].connect(self.operatorMatrix[i][j].Output)
@@ -406,17 +444,20 @@ class OpPixelFeaturesPresmoothed(Operator):
                     
                     # Prepare the individual features
                     featureCount += 1
-                    self.Features.resize( featureCount )
 
                     featureMeta = self.operatorMatrix[i][j].Output.meta
                     featureChannels = featureMeta.shape[ featureMeta.axistags.index('c') ]
                     self.Features[featureCount-1].meta.assignFrom( featureMeta )
+                    self.Features[featureCount-1].meta.description = self.FeatureInfos[self.features[i]][2].format(self.inScales[j])
                     self.featureOutputChannels.append( (channelCount, channelCount + featureChannels) )
                     self.positionMatrix[i][j] = [channelCount,None]
                     channelCount += featureChannels
                     self.positionMatrix[i][j][1] = channelCount
                 else:
                     self.positionMatrix[i][j] = [0,0]
+        
+        for index, slot in enumerate(self.Features):
+            assert slot.meta.description is not None, "Feature {} has no description!".format(index)
         
         self.stacker.AxisFlag.setValue('c')
         self.stacker.AxisIndex.setValue(self.Input.meta.axistags.index('c'))
@@ -498,11 +539,20 @@ class OpPixelFeaturesPresmoothed(Operator):
             resIter = 0
             cstart,cstop = origRoi.start[cIndex],origRoi.stop[cIndex]
             for sig in xrange(len(opM)):#for each sigma
+
+                warnings.warn("FIXME: Can't use an operator like this in execute!  This won't work for parallel calls to execute()")                
                 self.smoother.Sigma.setValue(self.incrSigmas[sig])
+                
                 if self.smoother.Input.connected: 
                     self.smoother.Input.disconnect()
+
+                warnings.warn("FIXME: Can't use an operator like this in execute!  This won't work for parallel calls to execute()")                
                 self.smoother.Input.setValue(source)
+                
+                warnings.warn("TODO: Parallelize these requests for better performance.")
                 source = self.smoother.Output().wait()
+                
+                
                 source = vigra.VigraArray(source,axistags=axistags)
                 for op in xrange(len(opM[sig])): #for each operator with this sigma
                     try:
@@ -512,7 +562,10 @@ class OpPixelFeaturesPresmoothed(Operator):
                     if opM[sig][op] is not None and pos[1] > cstart and pos[0] < cstop:
                         if opM[sig][op].Input.connected():
                             opM[sig][op].Input.disconnect()
+                            
+                            warnings.warn("FIXME: Can't use an operator like this in execute!  This won't work for parallel calls to execute()")                
                             opM[sig][op].Input.setValue(source)
+                            
                         currCStart,currCStop = max(cstart,pos[0]),min(cstop,pos[1])
                         currCRange = currCStop-currCStart
                         resSlicing = list(origRoi.copy().toSlice())
@@ -523,6 +576,8 @@ class OpPixelFeaturesPresmoothed(Operator):
                         opCStop = currCStop - pos[0]
                         opRoi = origRoi.copy()
                         opRoi.start[cIndex],opRoi.stop[cIndex] = opCStart,opCStop
+                        
+                        warnings.warn("TODO: Parallelize these requests for better performance.")
                         result[resSlicing] = opM[sig][op].Output(opRoi.start,opRoi.stop).wait()
             return result
         
@@ -563,8 +618,8 @@ class OpPixelFeaturesPresmoothed(Operator):
                     self.Output.setDirty(dirtyRoi)
 
         elif (slot == self.Matrix
-              or inputSlot == self.Scales
-              or inputSlot == self.FeatureIds):
+              or slot == self.Scales
+              or slot == self.FeatureIds):
             self.Output.setDirty(slice(None))
         else:
             assert False, "Unknown dirty input slot."
