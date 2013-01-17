@@ -8,8 +8,8 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
     <title>Advanced Concepts &mdash; lazyflow v0.1 documentation</title>
-    <link rel="stylesheet" href="_static/default.css" type="text/css" />
-    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="static/default.css" type="text/css" />
+    <link rel="stylesheet" href="static/pygments.css" type="text/css" />
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    '',
@@ -19,9 +19,9 @@
         HAS_SOURCE:  true
       };
     </script>
-    <script type="text/javascript" src="_static/jquery.js"></script>
-    <script type="text/javascript" src="_static/underscore.js"></script>
-    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="static/jquery.js"></script>
+    <script type="text/javascript" src="static/underscore.js"></script>
+    <script type="text/javascript" src="static/doctools.js"></script>
     <link rel="top" title="lazyflow v0.1 documentation" href="index.html" />
     <link rel="next" title="Utilities" href="utilities.html" />
     <link rel="prev" title="Overview" href="overview.html" /> 
@@ -79,7 +79,7 @@
 </div>
 <p>The operator above can be represented graphically with the following diagram:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/opSum.svg"><object data="_images/opSum.svg" type="image/svg+xml"><embed src="_images/opSum.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/opSum.svg"><object data="images/opSum.svg" type="image/svg+xml"><embed src="images/opSum.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>What if you want to add three images?  You could connect two OpSum operators together, like so:</p>
@@ -98,7 +98,7 @@
 </pre></div>
 </div>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/twoSums.svg"><object data="_images/twoSums.svg" type="image/svg+xml"><embed src="_images/twoSums.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/twoSums.svg"><object data="images/twoSums.svg" type="image/svg+xml"><embed src="images/twoSums.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 </div>
@@ -134,7 +134,7 @@ Graphically, we use circles for level-0 slots, and rectangles to represent slots
 </div>
 <p>Graphically, the OpMultiSum operator looks like this:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/opMultiSumEmpty.svg"><object data="_images/opMultiSumEmpty.svg" type="image/svg+xml"><embed src="_images/opMultiSumEmpty.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/opMultiSumEmpty.svg"><object data="images/opMultiSumEmpty.svg" type="image/svg+xml"><embed src="images/opMultiSumEmpty.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>Notice that our input slot has no capacity yet.  We can change that by resizing it with the number of slots we intend to connect:</p>
@@ -143,24 +143,24 @@ Graphically, we use circles for level-0 slots, and rectangles to represent slots
 </pre></div>
 </div>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/opMultiSum.svg"><object data="_images/opMultiSum.svg" type="image/svg+xml"><embed src="_images/opMultiSum.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/opMultiSum.svg"><object data="images/opMultiSum.svg" type="image/svg+xml"><embed src="images/opMultiSum.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>Alternatively, the input slot will be automatically resized to match its upstream partner as soon as you connect it.</p>
 <p>Before connection:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/multi_connect_before.svg"><object data="_images/multi_connect_before.svg" type="image/svg+xml"><embed src="_images/multi_connect_before.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/multi_connect_before.svg"><object data="images/multi_connect_before.svg" type="image/svg+xml"><embed src="images/multi_connect_before.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>After connection:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/multi_connect_after.svg"><object data="_images/multi_connect_after.svg" type="image/svg+xml"><embed src="_images/multi_connect_after.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/multi_connect_after.svg"><object data="images/multi_connect_after.svg" type="image/svg+xml"><embed src="images/multi_connect_after.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>When two multi-slots are connected, their subslots are internally connected to eachother.  For clarity, those connections aren&#8217;t typicaly shown in graphical diagrams.
 When you see two connected multi-slots, you can imagine their subslot connections looking like this:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/multi_connect_detail.svg"><object data="_images/multi_connect_detail.svg" type="image/svg+xml"><embed src="_images/multi_connect_detail.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/multi_connect_detail.svg"><object data="images/multi_connect_detail.svg" type="image/svg+xml"><embed src="images/multi_connect_detail.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 </div>
@@ -187,12 +187,12 @@ When you see two connected multi-slots, you can imagine their subslot connection
 </pre></div>
 </div>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/opThreshold.svg"><object data="_images/opThreshold.svg" type="image/svg+xml"><embed src="_images/opThreshold.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/opThreshold.svg"><object data="images/opThreshold.svg" type="image/svg+xml"><embed src="images/opThreshold.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>That works for a single image, but what if we have multiple images to threshold?  We need to implement an operator with this interface:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/opMultiThreshold.svg"><object data="_images/opMultiThreshold.svg" type="image/svg+xml"><embed src="_images/opMultiThreshold.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/opMultiThreshold.svg"><object data="images/opMultiThreshold.svg" type="image/svg+xml"><embed src="images/opMultiThreshold.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>A naive approach is to re-implement the original (single-image) operator from scratch:</p>
@@ -261,7 +261,7 @@ When you see two connected multi-slots, you can imagine their subslot connection
 <p>Okay, at least we&#8217;re not duplicating the execute function, which is the meat of the operator&#8217;s implementation.  But it&#8217;s still a lot of code!  Read the next section for an easier implementation.</p>
 <p>By the way, here&#8217;s what this composite operator&#8217;s diagram looks like:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/opMultiThreshold_composite.svg"><object data="_images/opMultiThreshold_composite.svg" type="image/svg+xml"><embed src="_images/opMultiThreshold_composite.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/opMultiThreshold_composite.svg"><object data="images/opMultiThreshold_composite.svg" type="image/svg+xml"><embed src="images/opMultiThreshold_composite.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>Notice that the <tt class="docutils literal"><span class="pre">ThresholdLevel</span></tt> slot is shared among all the internal thresholding operators.</p>
@@ -276,7 +276,7 @@ Lazyflow offers a handy generic utility for creating such operators known as the
 </div>
 <p>With no inputs, your diagram looks mostly empty.  Notice that the new operator has the same inputs and outputs as the single-image version, but each slot is one-level higher (they are lists).</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/wrapped_opThreshold_empty.svg"><object data="_images/wrapped_opThreshold_empty.svg" type="image/svg+xml"><embed src="_images/wrapped_opThreshold_empty.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/wrapped_opThreshold_empty.svg"><object data="images/wrapped_opThreshold_empty.svg" type="image/svg+xml"><embed src="images/wrapped_opThreshold_empty.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>When we add some inputs, we can see that our OperatorWrapper instance creates internal operators as necessary:</p>
@@ -284,7 +284,7 @@ Lazyflow offers a handy generic utility for creating such operators known as the
 </pre></div>
 </div>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/wrapped_opThreshold_with_inputs.svg"><object data="_images/wrapped_opThreshold_with_inputs.svg" type="image/svg+xml"><embed src="_images/wrapped_opThreshold_with_inputs.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/wrapped_opThreshold_with_inputs.svg"><object data="images/wrapped_opThreshold_with_inputs.svg" type="image/svg+xml"><embed src="images/wrapped_opThreshold_with_inputs.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>This is <em>almost</em> what we wanted.  Notice that the operator&#8217;s <tt class="docutils literal"><span class="pre">ThresholdLevel</span></tt> slot has level=1.  Furthermore, each internal operator&#8217;s <tt class="docutils literal"><span class="pre">ThresholdLevel</span></tt> slot is
@@ -297,7 +297,7 @@ We specify this by passing a list of slot names to &#8216;promote&#8217; (i.e. l
 </pre></div>
 </div>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/wrapped_opThreshold_with_shared_threshold.svg"><object data="_images/wrapped_opThreshold_with_shared_threshold.svg" type="image/svg+xml"><embed src="_images/wrapped_opThreshold_with_shared_threshold.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/wrapped_opThreshold_with_shared_threshold.svg"><object data="images/wrapped_opThreshold_with_shared_threshold.svg" type="image/svg+xml"><embed src="images/wrapped_opThreshold_with_shared_threshold.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>Now only the <tt class="docutils literal"><span class="pre">Input</span></tt> slot has been &#8216;promoted&#8217; to a list input.  The other slot, <tt class="docutils literal"><span class="pre">ThresholdLevel</span></tt> remains a level-0 slot, which is shared with all internal operators.</p>
@@ -329,7 +329,7 @@ We specify this by passing a list of slot names to &#8216;promote&#8217; (i.e. l
                         title="next chapter">Utilities</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
-    <li><a href="_sources/advanced.txt"
+    <li><a href="sources/advanced.txt"
            rel="nofollow">Show Source</a></li>
   </ul>
 <div id="searchbox" style="display: none">
