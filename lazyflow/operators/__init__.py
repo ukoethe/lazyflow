@@ -5,24 +5,25 @@ logger = logging.getLogger(__name__)
 import lazyflow
 
 from lazyflow.graph import Operator
-from lazyflow.helpers import itersubclasses
+from lazyflow.utility.helpers import itersubclasses
 
 try:
     if modules != None:
         pass
 except:
     modules = []
-    from obsolete import generic
-    from obsolete import vigraOperators
-    from obsolete import classifierOperators
-    from obsolete import valueProviders
-    from obsolete import operators
+    import generic
+    import vigraOperators
+    import classifierOperators
+    import valueProviders
+    import operators
     
     from opVigraWatershed import OpVigraWatershed
     from opVigraLabelVolume import OpVigraLabelVolume
     from opFilterLabels import OpFilterLabels
     from opColorizeLabels import OpColorizeLabels
     from opObjectFeatures import OpObjectFeatures
+    from adaptors import Op5ifyer
 
     ops = itersubclasses(Operator)
     logger.debug("Loading default Operators...")

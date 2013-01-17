@@ -1,7 +1,7 @@
 from lazyflow.graph import Operator,InputSlot,OutputSlot
-from lazyflow.helpers import newIterator
-from lazyflow.operators.obsolete.generic import OpMultiArrayStacker
-from lazyflow.operators.obsolete.vigraOperators import Op50ToMulti
+from lazyflow.utility.helpers import newIterator
+from lazyflow.operators.generic import OpMultiArrayStacker
+from lazyflow.operators.vigraOperators import Op50ToMulti
 from lazyflow.rtype import SubRegion
 import numpy
 import vigra
@@ -48,7 +48,11 @@ class OpBaseVigraFilter(Operator):
         """
         calculates halo, depends on the filter
         """
-        return 2*numpy.ceil(sigma*self.windowSize)+1
+        if isinstance(sigma, collections.Iterable):
+            halos = [2*numpy.ceil(s*self.windowSize)+1 for s in sigma]
+            return tuple(halos)
+        else:
+            return 2*numpy.ceil(sigma*self.windowSize)+1
     
     def propagateDirty(self,slot,subindex,roi):
         if slot == self.Input:
@@ -127,7 +131,6 @@ class OpGaussianSmoothing(OpBaseVigraFilter):
     
     def setupFilter(self):
         sigma = self.inputs["Sigma"].value
-        
         def tmpFilter(source,sigma,window_size,roi):
             tmpfilter = vigra.filters.gaussianSmoothing
             return tmpfilter(array=source,sigma=sigma,window_size=window_size,roi=(roi.start,roi.stop))

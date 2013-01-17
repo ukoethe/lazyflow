@@ -5,7 +5,6 @@ from lazyflow.graph import Operator, InputSlot, OutputSlot
 from lazyflow.roi import sliceToRoi, roiToSlice, block_view, TinyVector
 from Queue import Empty
 from collections import deque
-from lazyflow.h5dumprestore import stringToClass
 import greenlet, threading
 import vigra
 import copy
@@ -20,8 +19,11 @@ from lazyflow.rtype import SubRegion
 import time
 from functools import partial
 import threading
-import psutil
 import gc
+
+import psutil
+if psutil.__version__ < '0.6':
+    raise RuntimeError("lazyflow requires psutil 0.6.  Please upgrade your version of psutil (e.g. easy_install -U psutil)")
 
 try:
     import blist
@@ -39,7 +41,7 @@ except:
 import logging
 logger = logging.getLogger(__name__)
 traceLogger = logging.getLogger("TRACE." + __name__)
-from lazyflow.tracer import Tracer
+from lazyflow.utility import Tracer
 
 class OpArrayPiper(Operator):
     name = "ArrayPiper"
@@ -237,6 +239,10 @@ def fastWhere(cond, A, B, dtype):
 
 class ArrayCacheMemoryMgr(threading.Thread):
 
+    loggingName = __name__ + ".ArrayCacheMemoryMgr"
+    logger = logging.getLogger(loggingName)
+    traceLogger = logging.getLogger("TRACE." + loggingName)
+
     def __init__(self):
         threading.Thread.__init__(self)
         self.daemon = True
@@ -254,54 +260,61 @@ class ArrayCacheMemoryMgr(threading.Thread):
         return blist.sortedlist((), getPrio)
 
     def add(self, array_cache):
-        self._lock.acquire()
-        self.caches.add(array_cache)
-        self._lock.release()
+        with self._lock:
+            self.caches.add(array_cache)
 
     def remove(self, array_cache):
-        self._lock.acquire()
-        try:
-            self.caches.remove(array_cache)
-        except ValueError:
-            pass
-        self._lock.release()
+        with self._lock:
+            try:
+                self.caches.remove(array_cache)
+            except ValueError:
+                pass
 
     def run(self):
         while True:
-            time.sleep(2)      
-            mem_usage = psutil.phymem_usage().percent
-
+            vmem = psutil.virtual_memory()
+            mem_usage = vmem.percent
+            mem_usage_mb = (vmem.total - vmem.available) / (1000*1000)
             delta = abs(self._last_usage - mem_usage)
+            if delta > 10 or logger.level == logging.DEBUG:
+                cpu_usages = psutil.cpu_percent(interval=1, percpu=True)
+                avg = sum(cpu_usages) / len(cpu_usages)
+                self.logger.info( "CPU: Avg={}, {}".format( avg, cpu_usages ))
+                self.logger.info( "RAM: {:d} MB ({:02.2f}%)".format(mem_usage_mb, mem_usage) )
             if delta > 10:
-                logger.info("Memory Manager: usage = %f%%" % mem_usage)
                 self._last_usage = mem_usage
 
+            time.sleep(10)      
+
             if mem_usage > self._max_usage:
-                logger.info("Memory Manager: freeing memory...")
-                self._lock.acquire()
-                count = 0
-                not_freed = []
-                old_length = len(self.caches)
-                new_caches = self._new_list()
-                for c in iter(self.caches):
-                    c._updatePriority(c._last_access)
-                    new_caches.add(c)
-                self.caches = new_caches
-                gc.collect()
-                while mem_usage > self._target_usage and len(self.caches) > 0:
-                    last_cache = self.caches.pop(-1)
-                    freed = last_cache._freeMemory(refcheck = False)
-                    mem_usage = psutil.phymem_usage().percent
-                    count += 1
-                    if freed == 0:
-                        # store the caches which could not be freed
-                        not_freed.append(last_cache)
-                self._lock.release()
+                self.logger.info("freeing memory...")
+                with self._lock:
+                    count = 0
+                    not_freed = []
+                    old_length = len(self.caches)
+                    new_caches = self._new_list()
+                    self.traceLogger.debug("Updating {} caches".format( len(self.caches) ))
+                    for c in iter(self.caches):
+                        c._updatePriority(c._last_access)
+                        new_caches.add(c)
+                    self.caches = new_caches
+                    gc.collect()
+                    self.traceLogger.debug("Target mem usage: {}".format(self._target_usage))
+                    while mem_usage > self._target_usage and len(self.caches) > 0:
+                        self.traceLogger.debug("Mem usage: {}".format(mem_usage))
+                        last_cache = self.caches.pop(-1)
+                        freed = last_cache._freeMemory(refcheck = False)
+                        self.traceLogger.debug("Freed: {}".format(freed))
+                        mem_usage = psutil.phymem_usage().percent
+                        count += 1
+                        if freed == 0:
+                            # store the caches which could not be freed
+                            not_freed.append(last_cache)
                 gc.collect()
                 if mem_usage < self._target_usage:
-                    logger.info("Memory Manager: freed %d/%d blocks, new usage = %f%%" % (count,old_length, mem_usage))
+                    self.logger.info("freed %d/%d blocks, new usage = %f%%" % (count,old_length, mem_usage))
                 else:
-                    logger.info("Memory Manager: freed all (%d/%d) blocks, new usage = %f%%, failed goal of %f since all other blocks are currently in use." % (count, old_length,mem_usage, self._target_usage))
+                    self.logger.info("freed all (%d/%d) blocks, new usage = %f%%, failed goal of %f since all other blocks are currently in use." % (count, old_length,mem_usage, self._target_usage))
                 
                 for c in not_freed:
                     # add the caches which could not be freed
@@ -346,14 +359,13 @@ class OpArrayCache(OpArrayPiper):
             self._fixed = False
             self._cache = None
             self._lock = Lock()
-            self._cacheLock = threading.Lock()#greencall.Lock()
+            self._cacheLock = request.Lock()#greencall.Lock()
             self._lazyAlloc = True
             self._cacheHits = 0
             self.graph._registerCache(self)
             self._has_fixed_dirty_blocks = False
             self._memory_manager = ArrayCacheMemoryMgr.instance
             self._running = 0
-            #lazyflow.verboseMemory = True
 
     def _memorySize(self):
         if self._cache is not None:
@@ -362,8 +374,7 @@ class OpArrayCache(OpArrayPiper):
             return 0
 
     def _freeMemory(self, refcheck = True):
-        with Tracer(self.traceLogger):
-            self._cacheLock.acquire()
+        with self._cacheLock:
             freed  = self._memorySize()
             if self._cache is not None:
                 fshape = self._cache.shape
@@ -371,18 +382,15 @@ class OpArrayCache(OpArrayPiper):
                     self._cache.resize((1,), refcheck = refcheck)
                 except ValueError:
                     freed = 0
-                    if lazyflow.verboseMemory:
-                        self.logger.warn("OpArrayCache: freeing failed due to view references")
+                    self.logger.warn("OpArrayCache: freeing failed due to view references")
                 if freed > 0:
-                    if lazyflow.verboseMemory:
-                        self.logger.debug("OpArrayCache: freed cache of shape:{}".format(fshape))
+                    self.logger.debug("OpArrayCache: freed cache of shape:{}".format(fshape))
     
                     self._lock.acquire()
                     self._blockState[:] = OpArrayCache.DIRTY
                     del self._cache
                     self._cache = None
                     self._lock.release()
-            self._cacheLock.release()
             return freed
 
     def _allocateManagementStructures(self):
@@ -396,8 +404,7 @@ class OpArrayCache(OpArrayPiper):
     
             self._dirtyShape = numpy.ceil(1.0 * numpy.array(self.shape) / numpy.array(self._blockShape))
     
-            if lazyflow.verboseMemory:
-                self.logger.debug("Configured OpArrayCache with shape={}, blockShape={}, dirtyShape={}, origBlockShape={}".format(self.shape, self._blockShape, self._dirtyShape, self._origBlockShape))
+            self.logger.debug("Configured OpArrayCache with shape={}, blockShape={}, dirtyShape={}, origBlockShape={}".format(self.shape, self._blockShape, self._dirtyShape, self._origBlockShape))
     
             # if the entry in _dirtyArray differs from _dirtyState
             # the entry is considered dirty
@@ -425,22 +432,19 @@ class OpArrayCache(OpArrayPiper):
 
 
     def _allocateCache(self):
-        with Tracer(self.traceLogger):
-            self._cacheLock.acquire()
+        with self._cacheLock:
             self._last_access = None
             self._cache_priority = 0
             self._running = 0
 
             if self._cache is None or (self._cache.shape != self.shape):
                 mem = numpy.zeros(self.shape, dtype = self.dtype)
-                if lazyflow.verboseMemory:
-                    self.logger.debug("OpArrayCache: Allocating cache (size: %dbytes)" % mem.nbytes)
+                self.logger.debug("OpArrayCache: Allocating cache (size: %dbytes)" % mem.nbytes)
                 self.graph._notifyMemoryAllocation(self, mem.nbytes)
                 if self._blockState is None:
                     self._allocateManagementStructures()
                 self._cache = mem
             self._memory_manager.add(self)
-            self._cacheLock.release()
 
     def setupOutputs(self):
         with Tracer(self.traceLogger):
@@ -702,50 +706,6 @@ class OpArrayCache(OpArrayPiper):
             self._blockState[blockKey] = self._dirtyState
             self._blockQuery[blockKey] = None
             self._lock.release()
-
-    def dumpToH5G(self, h5g, patchBoard):
-        h5g.dumpSubObjects({
-                    "graph": self.graph,
-                    "inputs": self.inputs,
-                    "outputs": self.outputs,
-                    "_origBlockShape" : self._origBlockShape,
-                    "_blockShape" : self._blockShape,
-                    "_dirtyShape" : self._dirtyShape,
-                    "_blockState" : self._blockState,
-                    "_dirtyState" : self._dirtyState,
-                    "_cache" : self._cache,
-                    "_lazyAlloc" : self._lazyAlloc,
-                    "_cacheHits" : self._cacheHits,
-                    "_fixed" : self._fixed
-                },patchBoard)
-
-
-    @classmethod
-    def reconstructFromH5G(cls, h5g, patchBoard):
-
-        g = h5g["graph"].reconstructObject(patchBoard)
-
-        op = stringToClass(h5g.attrs["className"])(graph=g)
-
-        patchBoard[h5g.attrs["id"]] = op
-        h5g.reconstructSubObjects(op, {
-                    "inputs": "inputs",
-                    "outputs": "outputs",
-                    "_origBlockShape" : "_origBlockShape",
-                    "_blockShape" : "_blockShape",
-                    "_blockState" : "_blockState",
-                    "_dirtyState" : "_dirtyState",
-                    "_dirtyShape" : "_dirtyShape",
-                    "_cache" : "_cache",
-                    "_lazyAlloc" : "_lazyAlloc",
-                    "_cacheHits" : "_cacheHits",
-                    "_fixed" : "_fixed"
-                },patchBoard)
-
-        setattr(op, "_blockQuery", numpy.ndarray(op._dirtyShape, dtype = object))
-
-        return op
-
 
 if has_blist:
     class OpSparseLabelArray(Operator):
@@ -1033,8 +993,7 @@ if has_blist:
     
                     self._dirtyShape = numpy.ceil(1.0 * numpy.array(self._cacheShape) / numpy.array(self._blockShape))
     
-                    if lazyflow.verboseMemory:
-                        print "Reconfigured Sparse labels with ", self._cacheShape, self._blockShape, self._dirtyShape, self._origBlockShape
+                    self.logger.debug( "Reconfigured Sparse labels with {}, {}, {}, {}".format( self._cacheShape, self._blockShape, self._dirtyShape, self._origBlockShape ) )
                     #FIXME: we don't really need this blockState thing
                     self._blockState = numpy.ones(self._dirtyShape, numpy.uint8)
     
@@ -1071,8 +1030,6 @@ if has_blist:
                 blockStop = (1.0 * stop / self._blockShape).ceil()
                 blockKey = roiToSlice(blockStart,blockStop)
                 innerBlocks = self._blockNumbers[blockKey]
-                if lazyflow.verboseRequests:
-                    print "OpBlockedSparseLabelArray %r: request with key %r for %d inner Blocks " % (self,key, len(innerBlocks.ravel()))
                 for b_ind in innerBlocks.ravel():
                     #which part of the original key does this block fill?
                     offset = self._blockShape*self._flatBlockIndices[b_ind]
@@ -1317,10 +1274,6 @@ class OpBlockedArrayCache(Operator):
         #blockStop = numpy.where(stop == self.shape, self._dirtyShape, blockStop)
         blockKey = roiToSlice(blockStart,blockStop)
         innerBlocks = self._blockNumbers[blockKey]
-
-        if lazyflow.verboseRequests:
-            print "OpSparseArrayCache %r: request with key %r for %d inner Blocks " % (self,key, len(innerBlocks.ravel()))
-
 
         requests = []
         for b_ind in innerBlocks.flat:

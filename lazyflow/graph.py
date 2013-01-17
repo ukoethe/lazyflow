@@ -46,36 +46,9 @@ import logging
 from request import Request, Singleton
 import rtype
 from lazyflow.stype import ArrayLike
-from lazyflow import slicingtools
+from lazyflow.utility import slicingtools
 
-from lazyflow.tracer import Tracer
-
-class OrderedSignal(object):
-    """
-    A callback mechanism that ensures callbacks occur in the same order as subscription.
-    """
-    def __init__(self):
-        self.callbacks = []
-
-    def subscribe(self, fn, **kwargs):
-        # Remove this function if we already have it
-        self.unsubscribe(fn)
-        # Add it to the end
-        self.callbacks.append((fn, kwargs))
-
-    def unsubscribe(self, fn):
-        # Find this function and remove its entry
-        for i, (f, kw) in enumerate(self.callbacks):
-            if f == fn:
-                self.callbacks.pop(i)
-                break
-
-    def __call__(self, *args):
-        """
-        Emit the signal.
-        """
-        for f, kw in self.callbacks:
-            f(*args, **kw)
+from lazyflow.utility import Tracer, OrderedSignal
 
 class MetaDict(dict):
     """
@@ -208,7 +181,7 @@ class Slot(object):
     def graph(self):
         return self.operator.graph
 
-    def __init__( self, name = "", operator = None, stype = ArrayLike, rtype = rtype.SubRegion, value = None, optional = False, level = 0):
+    def __init__( self, name="", operator=None, stype=ArrayLike, rtype=rtype.SubRegion, value=None, optional=False, level=0, nonlane=False ):
         """
         Constructor of the Slot class.
 
@@ -239,7 +212,8 @@ class Slot(object):
         self._subSlots = []           # if level > 0, this holds the sub-Input/Output slots
         self._stypeType = stype       # the slot type class
         self.stype = stype(self)      # the slot type instance
-
+        self.nonlane = nonlane        # For multislot, this flag protects it from being considered lane-indexed
+        
         self._sig_changed = OrderedSignal()
         self._sig_ready = OrderedSignal()
         self._sig_unready = OrderedSignal()
@@ -660,6 +634,8 @@ class Slot(object):
             # --> just relay the request
             return self.partner.get(roi, destination)
         else:
+            assert self.ready(), "Can't get data from slot {}.{} yet.  It isn't ready.".format(self.getRealOperator().__class__, self.name)
+
             # If someone is asking for data from an inputslot that has no value and no partner,
             #  then something is wrong.
             assert self._type != "input", "This inputSlot has no value and no partner.  You can't ask for its data yet!"
@@ -1006,9 +982,9 @@ class Slot(object):
         if level is None:
             level = self.level
         if self._type == "input":
-            s = InputSlot(self.name, operator, stype = self._stypeType, rtype = self.rtype, value = self._defaultValue, optional = self._optional, level = level)
+            s = InputSlot(self.name, operator, stype = self._stypeType, rtype = self.rtype, value = self._defaultValue, optional = self._optional, level = level, nonlane=self.nonlane)
         elif self._type == "output":
-            s = OutputSlot(self.name, operator, stype = self._stypeType, rtype = self.rtype, value = self._defaultValue, optional = self._optional, level = level)
+            s = OutputSlot(self.name, operator, stype = self._stypeType, rtype = self.rtype, value = self._defaultValue, optional = self._optional, level = level, nonlane=self.nonlane)
         return s
 
     def _changed(self):
@@ -1153,8 +1129,8 @@ class InputSlot(Slot):
     to directly provide a value as input (i.e. .setValue(value) call)
     """
 
-    def __init__(self, name = "", operator = None, stype = ArrayLike, rtype=rtype.SubRegion, value = None, optional = False, level = 0):
-        super(InputSlot, self).__init__(name = name, operator = operator, stype = stype, rtype=rtype, value = value, optional = optional, level = level)
+    def __init__(self, *args, **kwargs):
+        super(InputSlot, self).__init__(*args, **kwargs)
         self._type = "input"
         # configure operator in case of slot change
         self.notifyResized(self._configureOperator)
@@ -1176,8 +1152,8 @@ class OutputSlot(Slot):
     """
 
 
-    def __init__(self, name = "", operator = None, stype = ArrayLike, rtype = rtype.SubRegion, value = None, optional = False, level = 0):
-        super(OutputSlot, self).__init__(name = name, operator = operator, stype = stype, rtype=rtype, level = level)
+    def __init__(self, *args, **kwargs):
+        super(OutputSlot, self).__init__(*args, **kwargs)
         self._type = "output"
  
     def execute(self, slot, subindex, roi, result):
@@ -1326,9 +1302,10 @@ class Operator(object):
 
     def __init__( self, parent = None, graph = None ):
         if not( parent is None or isinstance(parent, Operator) ):
-            assert False, "parent of operator name='%s' must be an operator, not %r of type %s" % (self.name, parent, type(parent))
+            raise Exception("parent of operator name='%s' must be an operator, not %r of type %s" % (self.name, parent, type(parent)))
         if graph is None:
-            assert parent is not None, "parent of operator name='%s' is set to None in constructor" % self.name
+            if parent is None: 
+                raise Exception("Operator.__init__() [self.name='%s']: parent and graph can't be both None" % self.name)
             graph=parent.graph
         
         self.graph = graph
@@ -1364,7 +1341,7 @@ class Operator(object):
     # continue initialization, when user overrides __init__
     def _after_init(self):
         #provide simple default name for lazy users
-        if self.name == "":
+        if self.name == Operator.name:
             self.name = type(self).__name__
         assert self.graph is not None, "Operator %r: self.graph is None, the parent  (%r) given to the operator must have a valid .graph attribute! " % (self, self._parent)
         # check for slot uniqueness
@@ -1662,11 +1639,7 @@ class OperatorWrapper(Operator):
         self.promotedSlotNames = promotedSlotNames
 
         self.innerOperators = []
-        if lazyflow.verboseWrapping:
-            msgLevel = logging.INFO
-        else:
-            msgLevel = logging.DEBUG
-        self.logger.log(msgLevel, "wrapping operator '%s'" % (operatorClass.name))
+        self.logger.log(logging.DEBUG, "wrapping operator '%s'" % (operatorClass.name))
 
         # replicate input slot definitions
         for innerSlot in sorted(operatorClass.inputSlots, key=lambda s: s._global_slot_id):

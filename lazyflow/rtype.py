@@ -1,8 +1,9 @@
 from roi import sliceToRoi, roiToSlice
 import vigra,numpy,copy
 from lazyflow.roi import TinyVector
-from lazyflow import slicingtools
+from lazyflow.utility import slicingtools
 import cPickle as pickle
+import collections
 
 class RoiMeta(type):
     """
@@ -64,9 +65,12 @@ class Everything(Roi):
     pass
 
 class List(Roi):
-    def __init__(self, slot, iterable=()):
+    def __init__(self, slot, iterable=(), pslice=None):
         super(List, self).__init__(slot)
         self._l = list(iterable)
+        if pslice is not None:
+            print "pslice not none, but we are in a list!", pslice
+            self._l = [pslice]
     def __iter__( self ):
         return iter(self._l)
     def __len__( self ):
@@ -156,7 +160,10 @@ class SubRegion(Roi):
         if tIndex is not None:
             tStart = self.start[tIndex]
             tStop = self.stop[tIndex]
-        if type(shape == int):
+        if isinstance(shape, collections.Iterable):
+            #add a dummy number for the channel dimension
+            shape = shape+(1,)
+        else:
             tmp = shape
             shape = numpy.zeros(self.dim).astype(int)
             shape[:] = tmp

@@ -1,6 +1,7 @@
 import numpy, vigra
 from roi import roiToSlice, sliceToRoi
-from helpers import warn_deprecated
+from lazyflow.utility.helpers import warn_deprecated
+import warnings
 
 class SlotType( object ):
     def __init__( self, slot):
@@ -103,7 +104,7 @@ class ArrayLike( SlotType ):
 
 
     def isCompatible(self, value):
-        warn_deprecated("FIXME here")
+        warnings.warn("ArrayLike.isCompatible: FIXME here")
         return True
 
 
