@@ -118,7 +118,7 @@ class Worker(Thread):
                         self.current_request = gr.request
                         lock = gr.switch()
                         if lock:
-                          lock.release()
+                            lock.release()
     
                 # processan higher priority request if available
                 didRequest = False
@@ -137,7 +137,7 @@ class Worker(Thread):
                     gr.request = req
                     lock = gr.switch()
                     if lock:
-                      lock.release()
+                        lock.release()
     
                 if didRequest is False:
                     # only do a low priority request if no higher priority request
@@ -155,7 +155,7 @@ class Worker(Thread):
                         gr.request = req
                         lock = gr.switch()
                         if lock:
-                          lock.release()
+                            lock.release()
     
                 # reset the wait lock state, otherwise the surrounding while self.running loop will always be executed twice
                 try:
@@ -195,7 +195,8 @@ class ThreadPool(object):
         if os.environ.has_key("LAZYFLOW_THREAD_COUNT"):
             self.numThreads = int(os.environ["LAZYFLOW_THREAD_COUNT"])
         else:
-            self.numThreads = detectCPUs()
+            #self.numThreads = detectCPUs()
+            self.numThreads = 1
         self.lastWorker = None
         for i in range(self.numThreads):
             w = Worker(self)
