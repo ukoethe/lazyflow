@@ -108,7 +108,7 @@ def generateRandomRoi(maxShape,minShape = 0,minWidth = 0):
 
 
 
-class newIterator:
+class AxisIterator:
     def __init__(self,roi,srcGrid,trgtGrid,timeIndex = None,channelIndex = None):
         #cast list due to TinyVector being strange
         self.roi = (list(roi.start),list(roi.stop))
@@ -214,11 +214,4 @@ class newIterator:
  
 if __name__ == "__main__":
     
-    class roi:
-        def __init__(self,start,stop):
-            self.start = start
-            self.stop = stop
-    r = roi([16, 22, 35, 8],[34, 36, 36, 22])
-    nIt = newIterator(r,[1,26,13,1],[1,40,40,1],channelIndex=3,timeIndex=0)
-    for i,j,k in nIt:
-        pass
+    pass

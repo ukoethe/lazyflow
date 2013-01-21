@@ -1,5 +1,5 @@
 from lazyflow.graph import Operator,InputSlot,OutputSlot
-from lazyflow.utility.helpers import newIterator
+from lazyflow.utility.helpers import AxisIterator
 from lazyflow.request import Pool,Request
 from lazyflow.rtype import SubRegion
 import numpy
@@ -88,7 +88,6 @@ class OpBaseVigraFilter(Operator):
         
         #set up the roi to get the necessary source
         roi.expandByShape(halo,channelIndex,timeIndex).adjustChannel(channelsPerC,channelIndex,channelRes)
-        print roi,self.name
         source = self.Input(roi.start,roi.stop).wait()
         source = vigra.VigraArray(source,axistags=axistags)
         
@@ -98,7 +97,7 @@ class OpBaseVigraFilter(Operator):
         if timeIndex is not None:
             srcGrid[timeIndex] = 1
             trgtGrid[timeIndex] = 1
-        nIt = newIterator(origRoi,srcGrid,trgtGrid,timeIndex=timeIndex,channelIndex = channelIndex)
+        nIt = AxisIterator(origRoi,srcGrid,trgtGrid,timeIndex=timeIndex,channelIndex = channelIndex)
         
         #set up roi to work with vigra filters
         if timeIndex > channelIndex and timeIndex is not None:
@@ -471,7 +470,7 @@ class OpPixelFeaturesPresmoothed(Operator):
                             outChannels = self.operatorMatrix[sig][feat].Output.meta.shape[self.operatorMatrix[sig][feat].Output.meta.axistags.channelIndex]
                             self.positionMatrix[sig][feat] = [c,c + outChannels]
                             c += outChannels
-                            #now the freaking features
+                            #now the features
                             self.Features[f].meta.assignFrom(self.operatorMatrix[sig][feat].Output.meta)
                             self.Features[f].meta.description = self.FeatureInfos[self.features[feat]][2].format(self.inScales[sig])
                             self.featureOutputChannels.append(self.positionMatrix[sig][feat])
@@ -479,7 +478,7 @@ class OpPixelFeaturesPresmoothed(Operator):
                             
         for index, slot in enumerate(self.Features):
             assert slot.meta.description is not None, "Feature {} has no description!".format(index)
-        
+        #set the output shape, only the channel dimension has to be resized
         self.Output.meta.assignFrom(self.Input.meta)
         newShape = list(self.Input.meta.shape)
         newShape[self.Input.meta.axistags.channelIndex] = c
@@ -493,9 +492,9 @@ class OpPixelFeaturesPresmoothed(Operator):
             #get the channel information
             cIndex = self.Output.meta.axistags.channelIndex
             cstart,cstop = roi.start[cIndex],roi.stop[cIndex]
-            #open a pool. find some hookers, put them in
+            #open a pool
             pool = Pool()
-            resultC = 0 #channel variable for result
+            resultC = 0 #position variable of the channel dim of result
             for sig in range(len(self.positionMatrix)):#loop sigma
                 for feat in range(len(self.positionMatrix[sig])):#loop features
                     if self.positionMatrix[sig][feat]:
@@ -567,6 +566,4 @@ if __name__ == "__main__":
     n[:] = [[1,1],[1,1]] 
     op.Matrix.setValue(n)
     w = op.Output().wait()
-    for i in range(w.shape[2]):
-        vigra.impex.writeImage(w[:,:,i],"%02d.jpg"%(i))
     print w.shape
