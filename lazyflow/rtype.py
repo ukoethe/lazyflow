@@ -98,7 +98,9 @@ class SubRegion(Roi):
         else:
             self.start = TinyVector(start)
             self.stop = TinyVector(stop)
+        self.slot = slot
         self.dim = len(self.start)
+        self.inputShape = None
 
     def __str__( self ):
         return "".join(("Subregion: start '", str(self.start), "' stop '", str(self.stop), "'"))
@@ -114,11 +116,12 @@ class SubRegion(Roi):
         return eval(s)
 
     def setInputShape(self,inputShape):
-        assert type(inputShape) == tuple
         self.inputShape = inputShape
 
     def copy(self):
-        return copy.copy(self)
+        cpRoi = SubRegion(self.slot,self.start,self.stop)
+        cpRoi.setInputShape(self.inputShape) 
+        return cpRoi
 
     def popDim(self, dim):
         """
@@ -196,6 +199,7 @@ class SubRegion(Roi):
         if cPerC != 1 and channelRes == 1:
             start = [self.start[i]/cPerC if i == cIndex else self.start[i] for i in range(len(self.start))]
             stop = [self.stop[i]/cPerC+1 if i==cIndex else self.stop[i] for i in range(len(self.stop))]
+            stop = [self.inputShape[i] if stop[i]>self.inputShape[i] else stop[i] for i in range(len(stop))]
             self.start = TinyVector(start)
             self.stop = TinyVector(stop)
         elif channelRes > 1:

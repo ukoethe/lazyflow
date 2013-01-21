@@ -26,8 +26,8 @@ class OpBaseVigraFilter(Operator):
     
     def getChannelResolution(self):
         """
-        returns how the number of source channels which get mapped on one unit
-        of result channels
+        returns the number of source channels which get mapped on one result
+        channel
         """
         return 1
      
@@ -72,9 +72,6 @@ class OpBaseVigraFilter(Operator):
         outputSlot.setShapeAtAxisTo('c', channelNum)
         
     def execute(self, slot, subindex, roi, result):
-        
-        print roi
-        
         #request,set or compute the necessary parameters
         axistags = self.Input.meta.axistags
         inputShape  = self.Input.meta.shape
@@ -91,6 +88,7 @@ class OpBaseVigraFilter(Operator):
         
         #set up the roi to get the necessary source
         roi.expandByShape(halo,channelIndex,timeIndex).adjustChannel(channelsPerC,channelIndex,channelRes)
+        print roi,self.name
         source = self.Input(roi.start,roi.stop).wait()
         source = vigra.VigraArray(source,axistags=axistags)
         
@@ -114,10 +112,11 @@ class OpBaseVigraFilter(Operator):
         origRoi.adjustRoi(halo)
         
         #iterate over the requested volumes
-        
-        warnings.warn("TODO: This loop could be parallelized for better performance.")
+        pool = Pool()
         for src,trgt,mask in nIt:
-            result[trgt] = self.vigraFilter(source = source[src],window_size=self.windowSize,roi=origRoi)[mask]
+            req = Request(partial(result.__setitem__,trgt,self.vigraFilter(source = source[src],window_size=self.windowSize,roi=origRoi)[mask]))
+            pool.add(req)
+        pool.wait()
         return result
     
 class OpGaussianSmoothing(OpBaseVigraFilter):
@@ -168,7 +167,6 @@ class OpDifferenceOfGaussians(OpBaseVigraFilter):
     
     def channelsPerChannel(self):
         return 1
-
         
 class OpHessianOfGaussian(OpBaseVigraFilter):
     inputSlots = [InputSlot("Input"),InputSlot("Sigma")]
@@ -505,12 +503,11 @@ class OpPixelFeaturesPresmoothed(Operator):
                         if cstop-start > 0 and stop-cstart > 0: #check if its requested
                            rstart = max(0,cstart-start) #calculate request start
                            rstop = min(cstop-start,stop-start) #calculate request stop
-                           #FIXME: why doesnt this work
                            reqroi = roi.copy() #roi for the request
                            resroi = roi.copy() #roi for the result array
-                           reqroi.setDim(cIndex,rstart,rstop)#adjust roi for the individual requests
-                           resroi.setDim(cIndex,resultC,resultC+rstop-rstart)#set result roi channelposition
-                           resultC += rstop-rstart#carry on.
+                           reqroi.setDim(cIndex,rstart,rstop) #adjust roi for the individual requests
+                           resroi.setDim(cIndex,resultC,resultC+rstop-rstart) #set result roi channelposition
+                           resultC += rstop-rstart #carry on.
                            req = self.operatorMatrix[sig][feat].Output(reqroi.start,reqroi.stop).writeInto(result[resroi.toSlice()])
                            pool.add(req)
             pool.wait()
@@ -526,50 +523,50 @@ class OpPixelFeaturesPresmoothed(Operator):
             return self.execute(self.Output,(), roi, result)
 
     def propagateDirty(self,slot,subindex,roi):
-   
         if slot == self.Input:
-            channelAxis = self.Input.meta.axistags.index('c')
-            numChannels = self.Input.meta.shape[channelAxis]
-            dirtyChannels = roi.stop[channelAxis] - roi.start[channelAxis]
-            
+            cIndex = self.Input.meta.axistags.channelIndex
+            cSizeIn = self.Input.meta.shape[cIndex]
+            cSizeOut = self.Output.meta.shaoe[cIndex]
+            dirtyC = roi.stop[cIndex] - roi.start[cIndex]
             # If all the input channels were dirty, the dirty output region is a contiguous block
-            if dirtyChannels == numChannels:
-                dirtyKey = roiToSlice(roi.start, roi.stop)
-                dirtyKey[channelAxis] = slice(None)
-                dirtyRoi = sliceToRoi(dirtyKey, self.Output.meta.shape)
-                self.Output.setDirty(dirtyRoi[0], dirtyRoi[1])
+            if dirtyC == cSize:
+                droi = roi.copy()
+                droi.setDim(cIndex,0,cSizeOut)
+                self.Output.setDirty(dirtyRoi.start, dirtyRoi.stop)
             else:
                 # Only some input channels were dirty,
                 # so we must mark each dirty output region separately.
-                numFeatures = self.Output.meta.shape[channelAxis] / numChannels
-                for featureIndex in range(numFeatures):
-                    startChannel = numChannels*featureIndex + roi.start[channelAxis]
-                    stopChannel = startChannel + roi.stop[channelAxis]
-                    dirtyRoi = copy.copy(roi)
-                    dirtyRoi.start[channelAxis] = startChannel
-                    dirtyRoi.stop[channelAxis] = stopChannel
-                    self.Output.setDirty(dirtyRoi)
-
+                for f in range(len(self.features)):
+                    cPerc = self.FeatureInfos[f][0].channelsPerChannel()
+                    fStart = self.featureOutputChannels[f][0] 
+                    start = fStart+cPerc*roi.start[cIndex]
+                    stop = fStart+cPerc*roi.stop[cIndex]
+                    droi = roi.copy()
+                    droi.setDim(cIndex,start,stop)
+                    self.Output.setDirty(droi.start,droi.stop)
         elif (slot == self.Matrix
               or slot == self.Scales
               or slot == self.FeatureIds):
             self.Output.setDirty(slice(None))
         else:
             assert False, "Unknown dirty input slot."
+        pass
 
 if __name__ == "__main__":
     from lazyflow.graph import Graph
     from volumina.viewer import Viewer
     from PyQt4.QtGui import QMainWindow, QApplication
     import sys,vigra
-    
     g = Graph()
-    v = vigra.VigraArray(1000*numpy.random.rand(10,10,4),axistags = vigra.defaultAxistags('xyc'))
+    v = vigra.VigraArray(1000*numpy.random.rand(100,100,3),axistags = vigra.defaultAxistags('xyc'))
     op = OpPixelFeaturesPresmoothed(graph = g)
-    op.FeatureIds.setValue(["GaussianSmoothing","StructureTensorEigenvalues"])
+    op.FeatureIds.setValue(["StructureTensorEigenvalues","HessianOfGaussianEigenvalues"])
     op.Scales.setValue([1.5,2.0])
     op.Input.setValue(v)
     n = numpy.ndarray((2,2))
     n[:] = [[1,1],[1,1]] 
     op.Matrix.setValue(n)
     w = op.Output().wait()
+    for i in range(w.shape[2]):
+        vigra.impex.writeImage(w[:,:,i],"%02d.jpg"%(i))
+    print w.shape
