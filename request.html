@@ -8,8 +8,8 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
     <title>Lazyflow Request Framework &mdash; lazyflow v0.1 documentation</title>
-    <link rel="stylesheet" href="_static/default.css" type="text/css" />
-    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="static/default.css" type="text/css" />
+    <link rel="stylesheet" href="static/pygments.css" type="text/css" />
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    '',
@@ -19,9 +19,9 @@
         HAS_SOURCE:  true
       };
     </script>
-    <script type="text/javascript" src="_static/jquery.js"></script>
-    <script type="text/javascript" src="_static/underscore.js"></script>
-    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="static/jquery.js"></script>
+    <script type="text/javascript" src="static/underscore.js"></script>
+    <script type="text/javascript" src="static/doctools.js"></script>
     <link rel="top" title="lazyflow v0.1 documentation" href="index.html" />
     <link rel="next" title="Utilities" href="utilities.html" />
     <link rel="prev" title="Advanced Concepts" href="advanced.html" /> 
@@ -109,7 +109,7 @@ complete in other requests, it is temporarily suspended so that its OS thread ca
 See the Request Framework documentation for details.</p>
 <p>This dependency diagram shows how user-defined workloads depend on the parts of the request system.</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_framework_structure.svg"><object data="_images/request_framework_structure.svg" type="image/svg+xml"><embed src="_images/request_framework_structure.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_framework_structure.svg"><object data="images/request_framework_structure.svg" type="image/svg+xml"><embed src="images/request_framework_structure.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <div class="admonition note">
@@ -199,7 +199,7 @@ Anyway, we have more observations to make note of:</p>
 <h2><a class="toc-backref" href="#id7">Dependencies</a><a class="headerlink" href="#dependencies" title="Permalink to this headline">¶</a></h2>
 <p>Here&#8217;s a visualization of the dependencies between the requests from the quickstart example:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_dependency.svg"><object data="_images/request_dependency.svg" type="image/svg+xml"><embed src="_images/request_dependency.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_dependency.svg"><object data="images/request_dependency.svg" type="image/svg+xml"><embed src="images/request_dependency.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>As you can see, r1 depends on BOTH r2 and r3.  In a typical use case, request dependencies form a tree, but this isn&#8217;t always true.
@@ -231,7 +231,7 @@ Let&#8217;s tweak our example even further.  In the new version, we don&#8217;t 
 <p>Now our example is getting a little contrived for such a simple computation, but bear with us.
 The request dependencies are visualized in the following diagram:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_dependency_shared.svg"><object data="_images/request_dependency_shared.svg" type="image/svg+xml"><embed src="_images/request_dependency_shared.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_dependency_shared.svg"><object data="images/request_dependency_shared.svg" type="image/svg+xml"><embed src="images/request_dependency_shared.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 </div>
@@ -264,12 +264,12 @@ In such an environment, it may be necessary to <em>cancel</em> a request that ha
 <p>But a request will not be cancelled unless ALL of the requests that were waiting for it have already been cancelled.
 For example, suppose the dependency graph for some group of requests looked like this:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_cancellation_example_before.svg"><object data="_images/request_cancellation_example_before.svg" type="image/svg+xml"><embed src="_images/request_cancellation_example_before.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_cancellation_example_before.svg"><object data="images/request_cancellation_example_before.svg" type="image/svg+xml"><embed src="images/request_cancellation_example_before.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>Now suppose that we call <tt class="docutils literal"><span class="pre">r1.cancel()</span></tt>.  The following diagram shows all cancelled requests in red.</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_cancellation_example_after.svg"><object data="_images/request_cancellation_example_after.svg" type="image/svg+xml"><embed src="_images/request_cancellation_example_after.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_cancellation_example_after.svg"><object data="images/request_cancellation_example_after.svg" type="image/svg+xml"><embed src="images/request_cancellation_example_after.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>Notice that r3 and subsequent requests were <strong>not</strong> cancelled because there is a non-cancelled request (r2) still waiting for it.</p>
@@ -340,32 +340,32 @@ There is an interesting consequence of this behavior: For the special case where
 a single exception may propagate through multiple callstacks.</p>
 <p>Consider this request dependency graph:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_exception_propagation_before.svg"><object data="_images/request_exception_propagation_before.svg" type="image/svg+xml"><embed src="_images/request_exception_propagation_before.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_exception_propagation_before.svg"><object data="images/request_exception_propagation_before.svg" type="image/svg+xml"><embed src="images/request_exception_propagation_before.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>Suppose an exception is raised in r1.  The following series of diagrams highlights the requests in which the exception will be seen.</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_exception_propagation_before.svg"><object data="_images/request_exception_propagation_before.svg" type="image/svg+xml"><embed src="_images/request_exception_propagation_before.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_exception_propagation_before.svg"><object data="images/request_exception_propagation_before.svg" type="image/svg+xml"><embed src="images/request_exception_propagation_before.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_exception_propagation_step1.svg"><object data="_images/request_exception_propagation_step1.svg" type="image/svg+xml"><embed src="_images/request_exception_propagation_step1.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_exception_propagation_step1.svg"><object data="images/request_exception_propagation_step1.svg" type="image/svg+xml"><embed src="images/request_exception_propagation_step1.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_exception_propagation_step2.svg"><object data="_images/request_exception_propagation_step2.svg" type="image/svg+xml"><embed src="_images/request_exception_propagation_step2.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_exception_propagation_step2.svg"><object data="images/request_exception_propagation_step2.svg" type="image/svg+xml"><embed src="images/request_exception_propagation_step2.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_exception_propagation_step3.svg"><object data="_images/request_exception_propagation_step3.svg" type="image/svg+xml"><embed src="_images/request_exception_propagation_step3.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_exception_propagation_step3.svg"><object data="images/request_exception_propagation_step3.svg" type="image/svg+xml"><embed src="images/request_exception_propagation_step3.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_exception_propagation_step4.svg"><object data="_images/request_exception_propagation_step4.svg" type="image/svg+xml"><embed src="_images/request_exception_propagation_step4.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_exception_propagation_step4.svg"><object data="images/request_exception_propagation_step4.svg" type="image/svg+xml"><embed src="images/request_exception_propagation_step4.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_exception_propagation_step5.svg"><object data="_images/request_exception_propagation_step5.svg" type="image/svg+xml"><embed src="_images/request_exception_propagation_step5.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_exception_propagation_step5.svg"><object data="images/request_exception_propagation_step5.svg" type="image/svg+xml"><embed src="images/request_exception_propagation_step5.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 </div>
@@ -449,7 +449,7 @@ Worker thread for each subsequent call to <tt class="docutils literal"><span cla
 <h3><a class="toc-backref" href="#id18">Request Lifetime</a><a class="headerlink" href="#request-lifetime" title="Permalink to this headline">¶</a></h3>
 <p>We&#8217;ll use the following diagram to track the state of a request throughout its lifetime.</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_blank.svg"><object data="_images/request_lifetime_blank.svg" type="image/svg+xml"><embed src="_images/request_lifetime_blank.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_blank.svg"><object data="images/request_lifetime_blank.svg" type="image/svg+xml"><embed src="images/request_lifetime_blank.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>Let&#8217;s consider the first example we used in the <a class="reference internal" href="#quick-start"><em>Quick Start</em></a> section from above:</p>
@@ -481,7 +481,7 @@ Worker thread for each subsequent call to <tt class="docutils literal"><span cla
 </div>
 <p>Since it hasn&#8217;t been submitted yet, it isn&#8217;t yet known to the ThreadPool:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r1_not_submitted.svg"><object data="_images/request_lifetime_r1_not_submitted.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r1_not_submitted.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r1_not_submitted.svg"><object data="images/request_lifetime_r1_not_submitted.svg" type="image/svg+xml"><embed src="images/request_lifetime_r1_not_submitted.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <hr class="docutils" />
@@ -491,13 +491,13 @@ Worker thread for each subsequent call to <tt class="docutils literal"><span cla
 </div>
 <p>When the request is submitted, it is given to the ThreadPool.  Since the ThreadPool hasn&#8217;t seen this request previously, it ends up in the shared task queue.</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r1_unassigned.svg"><object data="_images/request_lifetime_r1_unassigned.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r1_unassigned.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r1_unassigned.svg"><object data="images/request_lifetime_r1_unassigned.svg" type="image/svg+xml"><embed src="images/request_lifetime_r1_unassigned.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <hr class="docutils" />
 <p>Next, it is picked up by one of the ThreadPool&#8217;s worker threads:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r1_executing_A.svg"><object data="_images/request_lifetime_r1_executing_A.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r1_executing_A.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r1_executing_A.svg"><object data="images/request_lifetime_r1_executing_A.svg" type="image/svg+xml"><embed src="images/request_lifetime_r1_executing_A.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <hr class="docutils" />
@@ -507,7 +507,7 @@ Worker thread for each subsequent call to <tt class="docutils literal"><span cla
 </pre></div>
 </div>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r2_r3_not_submitted.svg"><object data="_images/request_lifetime_r2_r3_not_submitted.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r2_r3_not_submitted.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r2_r3_not_submitted.svg"><object data="images/request_lifetime_r2_r3_not_submitted.svg" type="image/svg+xml"><embed src="images/request_lifetime_r2_r3_not_submitted.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <hr class="docutils" />
@@ -517,18 +517,18 @@ Worker thread for each subsequent call to <tt class="docutils literal"><span cla
 </pre></div>
 </div>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r3_submitted.svg"><object data="_images/request_lifetime_r3_submitted.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r3_submitted.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r3_submitted.svg"><object data="images/request_lifetime_r3_submitted.svg" type="image/svg+xml"><embed src="images/request_lifetime_r3_submitted.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>...which is eventually picked up by a ThreadPool Worker thread:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r3_executing_A.svg"><object data="_images/request_lifetime_r3_executing_A.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r3_executing_A.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r3_executing_A.svg"><object data="images/request_lifetime_r3_executing_A.svg" type="image/svg+xml"><embed src="images/request_lifetime_r3_executing_A.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <hr class="docutils" />
 <p>For the sake of illustration, let&#8217;s suppose that some other part of our app has also just submitted some requests:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_extra_requests_submitted.svg"><object data="_images/request_lifetime_extra_requests_submitted.svg" type="image/svg+xml"><embed src="_images/request_lifetime_extra_requests_submitted.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_extra_requests_submitted.svg"><object data="images/request_lifetime_extra_requests_submitted.svg" type="image/svg+xml"><embed src="images/request_lifetime_extra_requests_submitted.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <hr class="docutils" />
@@ -538,12 +538,12 @@ Worker thread for each subsequent call to <tt class="docutils literal"><span cla
 </div>
 <p>This happens in two steps.  First, r2 is submitted:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r2_submitted.svg"><object data="_images/request_lifetime_r2_submitted.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r2_submitted.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r2_submitted.svg"><object data="images/request_lifetime_r2_submitted.svg" type="image/svg+xml"><embed src="images/request_lifetime_r2_submitted.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>Next, r1 is <em>suspended</em> (since it is now waiting for r2).</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r1_suspended.svg"><object data="_images/request_lifetime_r1_suspended.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r1_suspended.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r1_suspended.svg"><object data="images/request_lifetime_r1_suspended.svg" type="image/svg+xml"><embed src="images/request_lifetime_r1_suspended.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <hr class="docutils" />
@@ -551,42 +551,42 @@ Worker thread for each subsequent call to <tt class="docutils literal"><span cla
 Since r1 has been suspended, it <em>no longer ties up a Thread</em>.
 The newly available worker now picks up a request from the shared queue:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r1_suspended_B.svg"><object data="_images/request_lifetime_r1_suspended_B.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r1_suspended_B.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r1_suspended_B.svg"><object data="images/request_lifetime_r1_suspended_B.svg" type="image/svg+xml"><embed src="images/request_lifetime_r1_suspended_B.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <hr class="docutils" />
 <p>Eventually, each request either completes or is suspended, and r2 makes it to the front of the shared queue:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r2_front_of_queue.svg"><object data="_images/request_lifetime_r2_front_of_queue.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r2_front_of_queue.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r2_front_of_queue.svg"><object data="images/request_lifetime_r2_front_of_queue.svg" type="image/svg+xml"><embed src="images/request_lifetime_r2_front_of_queue.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>...and gets picked up by a free worker:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r2_executing.svg"><object data="_images/request_lifetime_r2_executing.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r2_executing.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r2_executing.svg"><object data="images/request_lifetime_r2_executing.svg" type="image/svg+xml"><embed src="images/request_lifetime_r2_executing.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <hr class="docutils" />
 <p>Meanwhile, r3 finishes execution:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r3_finished.svg"><object data="_images/request_lifetime_r3_finished.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r3_finished.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r3_finished.svg"><object data="images/request_lifetime_r3_finished.svg" type="image/svg+xml"><embed src="images/request_lifetime_r3_finished.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <hr class="docutils" />
 <p>After a while, suppose other requests (from other parts of the app) continue to be submitted:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r2_executing_other_requests_woken.svg"><object data="_images/request_lifetime_r2_executing_other_requests_woken.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r2_executing_other_requests_woken.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r2_executing_other_requests_woken.svg"><object data="images/request_lifetime_r2_executing_other_requests_woken.svg" type="image/svg+xml"><embed src="images/request_lifetime_r2_executing_other_requests_woken.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <hr class="docutils" />
 <p>Eventually, r2 finishes execution:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r2_finished.svg"><object data="_images/request_lifetime_r2_finished.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r2_finished.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r2_finished.svg"><object data="images/request_lifetime_r2_finished.svg" type="image/svg+xml"><embed src="images/request_lifetime_r2_finished.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <hr class="docutils" />
 <p>Since r2 and r3 are both complete, r1 can finally be woken up again:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r1_woken_up.svg"><object data="_images/request_lifetime_r1_woken_up.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r1_woken_up.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r1_woken_up.svg"><object data="images/request_lifetime_r1_woken_up.svg" type="image/svg+xml"><embed src="images/request_lifetime_r1_woken_up.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>The last figure shows something important.  Did you catch it?  When r1 was <strong>initially</strong> submitted to the ThreadPool, it didn&#8217;t matter which Worker was chosen to execute it in.
@@ -598,12 +598,12 @@ See also: <a class="reference internal" href="#thread-context-guarantee"><em>Thr
 <hr class="docutils" />
 <p>When the first worker becomes free, r1 can finally resume execution:</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r1_executing_B.svg"><object data="_images/request_lifetime_r1_executing_B.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r1_executing_B.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r1_executing_B.svg"><object data="images/request_lifetime_r1_executing_B.svg" type="image/svg+xml"><embed src="images/request_lifetime_r1_executing_B.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 <p>...and eventually r1 finishes execution.</p>
 <div class="figure">
-<a class="reference internal image-reference" href="_images/request_lifetime_r1_finished.svg"><object data="_images/request_lifetime_r1_finished.svg" type="image/svg+xml"><embed src="_images/request_lifetime_r1_finished.svg" type="image/svg+xml" /></object>
+<a class="reference internal image-reference" href="images/request_lifetime_r1_finished.svg"><object data="images/request_lifetime_r1_finished.svg" type="image/svg+xml"><embed src="images/request_lifetime_r1_finished.svg" type="image/svg+xml" /></object>
 </a>
 </div>
 </div>
@@ -904,11 +904,11 @@ Not threadsafe (don&#8217;t add requests from more than one thread).</p>
 <h3><a class="toc-backref" href="#id27">ThreadPool</a><a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h3>
 <dl class="class">
 <dt id="lazyflow.request.threadPool.ThreadPool">
-<em class="property">class </em><tt class="descclassname">lazyflow.request.threadPool.</tt><tt class="descname">ThreadPool</tt><big>(</big><em>num_workers</em>, <em>queue_type=&lt;class 'lazyflow.request.threadPool.PriorityQueue'&gt;</em><big>)</big><a class="reference internal" href="_modules/lazyflow/request/threadPool.html#ThreadPool"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.request.threadPool.ThreadPool" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><tt class="descclassname">lazyflow.request.threadPool.</tt><tt class="descname">ThreadPool</tt><big>(</big><em>num_workers</em>, <em>queue_type=&lt;class 'lazyflow.request.threadPool.PriorityQueue'&gt;</em><big>)</big><a class="reference internal" href="modules/lazyflow/request/threadPool.html#ThreadPool"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.request.threadPool.ThreadPool" title="Permalink to this definition">¶</a></dt>
 <dd><p>Manages a set of worker threads and dispatches tasks to them.</p>
 <dl class="method">
 <dt id="lazyflow.request.threadPool.ThreadPool.__init__">
-<tt class="descname">__init__</tt><big>(</big><em>num_workers</em>, <em>queue_type=&lt;class 'lazyflow.request.threadPool.PriorityQueue'&gt;</em><big>)</big><a class="reference internal" href="_modules/lazyflow/request/threadPool.html#ThreadPool.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.request.threadPool.ThreadPool.__init__" title="Permalink to this definition">¶</a></dt>
+<tt class="descname">__init__</tt><big>(</big><em>num_workers</em>, <em>queue_type=&lt;class 'lazyflow.request.threadPool.PriorityQueue'&gt;</em><big>)</big><a class="reference internal" href="modules/lazyflow/request/threadPool.html#ThreadPool.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.request.threadPool.ThreadPool.__init__" title="Permalink to this definition">¶</a></dt>
 <dd><p>Constructor.  Starts all workers.</p>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
@@ -927,14 +927,14 @@ Not threadsafe (don&#8217;t add requests from more than one thread).</p>
 
 <dl class="method">
 <dt id="lazyflow.request.threadPool.ThreadPool.stop">
-<tt class="descname">stop</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/lazyflow/request/threadPool.html#ThreadPool.stop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.request.threadPool.ThreadPool.stop" title="Permalink to this definition">¶</a></dt>
+<tt class="descname">stop</tt><big>(</big><big>)</big><a class="reference internal" href="modules/lazyflow/request/threadPool.html#ThreadPool.stop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.request.threadPool.ThreadPool.stop" title="Permalink to this definition">¶</a></dt>
 <dd><p>Stop all threads in the pool, and block for them to complete.
 Postcondition: All worker threads have stopped.  Unfinished tasks are simply dropped.</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="lazyflow.request.threadPool.ThreadPool.wake_up">
-<tt class="descname">wake_up</tt><big>(</big><em>task</em><big>)</big><a class="reference internal" href="_modules/lazyflow/request/threadPool.html#ThreadPool.wake_up"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.request.threadPool.ThreadPool.wake_up" title="Permalink to this definition">¶</a></dt>
+<tt class="descname">wake_up</tt><big>(</big><em>task</em><big>)</big><a class="reference internal" href="modules/lazyflow/request/threadPool.html#ThreadPool.wake_up"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.request.threadPool.ThreadPool.wake_up" title="Permalink to this definition">¶</a></dt>
 <dd><p>Schedule the given task on the worker that is assigned to it.
 If it has no assigned worker yet, assign it to the first worker that becomes available.</p>
 </dd></dl>
@@ -943,19 +943,19 @@ If it has no assigned worker yet, assign it to the first worker that becomes ava
 
 <dl class="class">
 <dt id="lazyflow.request.threadPool.PriorityQueue">
-<em class="property">class </em><tt class="descclassname">lazyflow.request.threadPool.</tt><tt class="descname">PriorityQueue</tt><a class="reference internal" href="_modules/lazyflow/request/threadPool.html#PriorityQueue"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.request.threadPool.PriorityQueue" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><tt class="descclassname">lazyflow.request.threadPool.</tt><tt class="descname">PriorityQueue</tt><a class="reference internal" href="modules/lazyflow/request/threadPool.html#PriorityQueue"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.request.threadPool.PriorityQueue" title="Permalink to this definition">¶</a></dt>
 <dd><p>Simple threadsafe heap based on the python heapq module.</p>
 </dd></dl>
 
 <dl class="class">
 <dt id="lazyflow.request.threadPool.FifoQueue">
-<em class="property">class </em><tt class="descclassname">lazyflow.request.threadPool.</tt><tt class="descname">FifoQueue</tt><a class="reference internal" href="_modules/lazyflow/request/threadPool.html#FifoQueue"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.request.threadPool.FifoQueue" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><tt class="descclassname">lazyflow.request.threadPool.</tt><tt class="descname">FifoQueue</tt><a class="reference internal" href="modules/lazyflow/request/threadPool.html#FifoQueue"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.request.threadPool.FifoQueue" title="Permalink to this definition">¶</a></dt>
 <dd><p>Simple FIFO queue based on collections.deque.</p>
 </dd></dl>
 
 <dl class="class">
 <dt id="lazyflow.request.threadPool.LifoQueue">
-<em class="property">class </em><tt class="descclassname">lazyflow.request.threadPool.</tt><tt class="descname">LifoQueue</tt><a class="reference internal" href="_modules/lazyflow/request/threadPool.html#LifoQueue"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.request.threadPool.LifoQueue" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><tt class="descclassname">lazyflow.request.threadPool.</tt><tt class="descname">LifoQueue</tt><a class="reference internal" href="modules/lazyflow/request/threadPool.html#LifoQueue"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.request.threadPool.LifoQueue" title="Permalink to this definition">¶</a></dt>
 <dd><p>Simple LIFO queue based on collections.deque.</p>
 </dd></dl>
 
@@ -1017,7 +1017,7 @@ If it has no assigned worker yet, assign it to the first worker that becomes ava
                         title="next chapter">Utilities</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
-    <li><a href="_sources/request.txt"
+    <li><a href="sources/request.txt"
            rel="nofollow">Show Source</a></li>
   </ul>
 <div id="searchbox" style="display: none">
