@@ -8,8 +8,8 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
     <title>Utilities &mdash; lazyflow v0.1 documentation</title>
-    <link rel="stylesheet" href="_static/default.css" type="text/css" />
-    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="static/default.css" type="text/css" />
+    <link rel="stylesheet" href="static/pygments.css" type="text/css" />
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    '',
@@ -19,9 +19,9 @@
         HAS_SOURCE:  true
       };
     </script>
-    <script type="text/javascript" src="_static/jquery.js"></script>
-    <script type="text/javascript" src="_static/underscore.js"></script>
-    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="static/jquery.js"></script>
+    <script type="text/javascript" src="static/underscore.js"></script>
+    <script type="text/javascript" src="static/doctools.js"></script>
     <link rel="top" title="lazyflow v0.1 documentation" href="index.html" />
     <link rel="prev" title="Advanced Concepts" href="advanced.html" /> 
   </head>
@@ -323,20 +323,20 @@ The original code was released under the BSD License, as is this modified versio
 </dl>
 <dl class="class">
 <dt id="lazyflow.utility.fileLock.FileLock">
-<em class="property">class </em><tt class="descclassname">lazyflow.utility.fileLock.</tt><tt class="descname">FileLock</tt><big>(</big><em>protected_file_path</em>, <em>timeout=None</em>, <em>delay=1</em><big>)</big><a class="reference internal" href="_modules/lazyflow/utility/fileLock.html#FileLock"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.fileLock.FileLock" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><tt class="descclassname">lazyflow.utility.fileLock.</tt><tt class="descname">FileLock</tt><big>(</big><em>protected_file_path</em>, <em>timeout=None</em>, <em>delay=1</em><big>)</big><a class="reference internal" href="modules/lazyflow/utility/fileLock.html#FileLock"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.fileLock.FileLock" title="Permalink to this definition">¶</a></dt>
 <dd><p>A file locking mechanism that has context-manager support so 
 you can use it in a <tt class="docutils literal"><span class="pre">with</span></tt> statement. This should be relatively cross
 compatible as it doesn&#8217;t rely on <tt class="docutils literal"><span class="pre">msvcrt</span></tt> or <tt class="docutils literal"><span class="pre">fcntl</span></tt> for the locking.</p>
 <dl class="method">
 <dt id="lazyflow.utility.fileLock.FileLock.__init__">
-<tt class="descname">__init__</tt><big>(</big><em>protected_file_path</em>, <em>timeout=None</em>, <em>delay=1</em><big>)</big><a class="reference internal" href="_modules/lazyflow/utility/fileLock.html#FileLock.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.fileLock.FileLock.__init__" title="Permalink to this definition">¶</a></dt>
+<tt class="descname">__init__</tt><big>(</big><em>protected_file_path</em>, <em>timeout=None</em>, <em>delay=1</em><big>)</big><a class="reference internal" href="modules/lazyflow/utility/fileLock.html#FileLock.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.fileLock.FileLock.__init__" title="Permalink to this definition">¶</a></dt>
 <dd><p>Prepare the file locker. Specify the file to lock and optionally
 the maximum timeout and the delay between each attempt to lock.</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="lazyflow.utility.fileLock.FileLock.acquire">
-<tt class="descname">acquire</tt><big>(</big><em>blocking=True</em><big>)</big><a class="reference internal" href="_modules/lazyflow/utility/fileLock.html#FileLock.acquire"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.fileLock.FileLock.acquire" title="Permalink to this definition">¶</a></dt>
+<tt class="descname">acquire</tt><big>(</big><em>blocking=True</em><big>)</big><a class="reference internal" href="modules/lazyflow/utility/fileLock.html#FileLock.acquire"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.fileLock.FileLock.acquire" title="Permalink to this definition">¶</a></dt>
 <dd><p>Acquire the lock, if possible. If the lock is in use, and <cite>blocking</cite> is False, return False.
 Otherwise, check again every <cite>self.delay</cite> seconds until it either gets the lock or
 exceeds <cite>timeout</cite> number of seconds, in which case it raises an exception.</p>
@@ -344,26 +344,26 @@ exceeds <cite>timeout</cite> number of seconds, in which case it raises an excep
 
 <dl class="method">
 <dt id="lazyflow.utility.fileLock.FileLock.available">
-<tt class="descname">available</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/lazyflow/utility/fileLock.html#FileLock.available"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.fileLock.FileLock.available" title="Permalink to this definition">¶</a></dt>
+<tt class="descname">available</tt><big>(</big><big>)</big><a class="reference internal" href="modules/lazyflow/utility/fileLock.html#FileLock.available"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.fileLock.FileLock.available" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns True iff the file is currently available to be locked.</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="lazyflow.utility.fileLock.FileLock.locked">
-<tt class="descname">locked</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/lazyflow/utility/fileLock.html#FileLock.locked"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.fileLock.FileLock.locked" title="Permalink to this definition">¶</a></dt>
+<tt class="descname">locked</tt><big>(</big><big>)</big><a class="reference internal" href="modules/lazyflow/utility/fileLock.html#FileLock.locked"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.fileLock.FileLock.locked" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns True iff the file is owned by THIS FileLock instance.
 (Even if this returns false, the file could be owned by another FileLock instance, possibly in a different thread or process).</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="lazyflow.utility.fileLock.FileLock.purge">
-<tt class="descname">purge</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/lazyflow/utility/fileLock.html#FileLock.purge"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.fileLock.FileLock.purge" title="Permalink to this definition">¶</a></dt>
+<tt class="descname">purge</tt><big>(</big><big>)</big><a class="reference internal" href="modules/lazyflow/utility/fileLock.html#FileLock.purge"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.fileLock.FileLock.purge" title="Permalink to this definition">¶</a></dt>
 <dd><p>For debug purposes only.  Removes the lock file from the hard disk.</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="lazyflow.utility.fileLock.FileLock.release">
-<tt class="descname">release</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/lazyflow/utility/fileLock.html#FileLock.release"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.fileLock.FileLock.release" title="Permalink to this definition">¶</a></dt>
+<tt class="descname">release</tt><big>(</big><big>)</big><a class="reference internal" href="modules/lazyflow/utility/fileLock.html#FileLock.release"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.fileLock.FileLock.release" title="Permalink to this definition">¶</a></dt>
 <dd><p>Get rid of the lock by deleting the lockfile. 
 When working in a <cite>with</cite> statement, this gets automatically 
 called at the end.</p>
@@ -377,7 +377,7 @@ called at the end.</p>
 <p>Some lazyflow components rely on a special JSON config file format.  The <cite>JsonConfigParser</cite> class handles parsing such files.</p>
 <dl class="class">
 <dt id="lazyflow.utility.jsonConfig.JsonConfigParser">
-<em class="property">class </em><tt class="descclassname">lazyflow.utility.jsonConfig.</tt><tt class="descname">JsonConfigParser</tt><big>(</big><em>fields</em><big>)</big><a class="reference internal" href="_modules/lazyflow/utility/jsonConfig.html#JsonConfigParser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.jsonConfig.JsonConfigParser" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><tt class="descclassname">lazyflow.utility.jsonConfig.</tt><tt class="descname">JsonConfigParser</tt><big>(</big><em>fields</em><big>)</big><a class="reference internal" href="modules/lazyflow/utility/jsonConfig.html#JsonConfigParser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.jsonConfig.JsonConfigParser" title="Permalink to this definition">¶</a></dt>
 <dd><p>Simple config schema for json config files.
 Currently, only a very small set of json is supported.
 The schema fields must be a single non-nested dictionary of name : type (or pseudo-type) pairs.</p>
@@ -419,19 +419,19 @@ The schema fields must be a single non-nested dictionary of name : type (or pseu
 </div>
 <dl class="method">
 <dt id="lazyflow.utility.jsonConfig.JsonConfigParser.__init__">
-<tt class="descname">__init__</tt><big>(</big><em>fields</em><big>)</big><a class="reference internal" href="_modules/lazyflow/utility/jsonConfig.html#JsonConfigParser.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.jsonConfig.JsonConfigParser.__init__" title="Permalink to this definition">¶</a></dt>
+<tt class="descname">__init__</tt><big>(</big><em>fields</em><big>)</big><a class="reference internal" href="modules/lazyflow/utility/jsonConfig.html#JsonConfigParser.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.jsonConfig.JsonConfigParser.__init__" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="method">
 <dt id="lazyflow.utility.jsonConfig.JsonConfigParser.parseConfigFile">
-<tt class="descname">parseConfigFile</tt><big>(</big><em>configFilePath</em><big>)</big><a class="reference internal" href="_modules/lazyflow/utility/jsonConfig.html#JsonConfigParser.parseConfigFile"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.jsonConfig.JsonConfigParser.parseConfigFile" title="Permalink to this definition">¶</a></dt>
+<tt class="descname">parseConfigFile</tt><big>(</big><em>configFilePath</em><big>)</big><a class="reference internal" href="modules/lazyflow/utility/jsonConfig.html#JsonConfigParser.parseConfigFile"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.jsonConfig.JsonConfigParser.parseConfigFile" title="Permalink to this definition">¶</a></dt>
 <dd><p>Parse the JSON file at the given path into a <a class="reference internal" href="#lazyflow.utility.jsonConfig.Namespace" title="lazyflow.utility.jsonConfig.Namespace"><tt class="xref py py-class docutils literal"><span class="pre">Namespace</span></tt></a> object that provides easy access to the config contents.
 Fields are converted from default JSON types into the types specified by the schema.</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="lazyflow.utility.jsonConfig.JsonConfigParser.writeConfigFile">
-<tt class="descname">writeConfigFile</tt><big>(</big><em>configFilePath</em>, <em>configNamespace</em><big>)</big><a class="reference internal" href="_modules/lazyflow/utility/jsonConfig.html#JsonConfigParser.writeConfigFile"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.jsonConfig.JsonConfigParser.writeConfigFile" title="Permalink to this definition">¶</a></dt>
+<tt class="descname">writeConfigFile</tt><big>(</big><em>configFilePath</em>, <em>configNamespace</em><big>)</big><a class="reference internal" href="modules/lazyflow/utility/jsonConfig.html#JsonConfigParser.writeConfigFile"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.jsonConfig.JsonConfigParser.writeConfigFile" title="Permalink to this definition">¶</a></dt>
 <dd><p>Simply write the given object to a json file as a dict, 
 but check it for errors first by parsing each field with the schema.</p>
 </dd></dl>
@@ -440,7 +440,7 @@ but check it for errors first by parsing each field with the schema.</p>
 
 <dl class="class">
 <dt id="lazyflow.utility.jsonConfig.Namespace">
-<em class="property">class </em><tt class="descclassname">lazyflow.utility.jsonConfig.</tt><tt class="descname">Namespace</tt><a class="reference internal" href="_modules/lazyflow/utility/jsonConfig.html#Namespace"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.jsonConfig.Namespace" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><tt class="descclassname">lazyflow.utility.jsonConfig.</tt><tt class="descname">Namespace</tt><a class="reference internal" href="modules/lazyflow/utility/jsonConfig.html#Namespace"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lazyflow.utility.jsonConfig.Namespace" title="Permalink to this definition">¶</a></dt>
 <dd><p>Provides the same functionality as:</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Namespace</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
     <span class="k">pass</span>
@@ -982,7 +982,7 @@ Any optional parameters not provided by the user are filled in automatically.</p
                         title="previous chapter">Advanced Concepts</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
-    <li><a href="_sources/utilities.txt"
+    <li><a href="sources/utilities.txt"
            rel="nofollow">Show Source</a></li>
   </ul>
 <div id="searchbox" style="display: none">
