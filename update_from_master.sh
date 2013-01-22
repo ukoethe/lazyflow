@@ -43,4 +43,4 @@ git add -u .
 
 git commit -m "Prepared html files for output on github pages, which doesn't allow directories that begin with underscores."
 
-git push origin gh-pages
+git push origin -f gh-pages
