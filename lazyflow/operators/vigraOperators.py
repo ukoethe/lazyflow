@@ -426,7 +426,8 @@ class OpPixelFeaturesPresmoothed(Operator):
             req = self.inputs["Input"][treadKey].allocate()
 
             sourceArray = req.wait()
-            req.result = None
+            req.clean()
+            #req.result = None
             req.destination = None
             if sourceArray.dtype != numpy.float32:
                 sourceArrayF = sourceArray.astype(numpy.float32)
@@ -886,7 +887,8 @@ class OpPixelFeaturesInterpPresmoothed(Operator):
             req = self.inputs["Input"][treadKey].allocate()
             sourceArray = req.wait()
             
-            req.result = None
+            #req.result = None
+            req.clean()
             req.destination = None
             if sourceArray.dtype != numpy.float32:
                 sourceArrayF = sourceArray.astype(numpy.float32)
